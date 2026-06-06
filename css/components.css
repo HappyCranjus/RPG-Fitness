@@ -1,0 +1,430 @@
+/* ── Buttons ─────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--transition);
+  width: 100%;
+  text-align: center;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent-gold);
+  color: #0d0d1a;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+}
+
+.btn-primary:hover {
+  background: #ffe033;
+  box-shadow: var(--shadow-glow-gold);
+}
+
+.btn-danger {
+  background: var(--accent-red);
+  color: white;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  border-color: var(--border-bright);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--accent-blue);
+  text-decoration: underline;
+  min-height: 40px;
+  font-size: 0.85rem;
+}
+
+.btn-sm {
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+}
+
+.btn-icon {
+  width: auto;
+  min-width: 48px;
+  padding: 10px;
+  font-size: 1.2rem;
+}
+
+/* ── Cards ───────────────────────────────────── */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.card-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.card-tapable {
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.card-tapable:active {
+  background: var(--bg-card-hover);
+  transform: scale(0.99);
+}
+
+/* ── Progress bars ───────────────────────────── */
+
+.progress-track {
+  height: 10px;
+  background: var(--bg-primary);
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.progress-fill-gold {
+  background: linear-gradient(90deg, var(--accent-gold-dim), var(--accent-gold));
+}
+
+.progress-fill-red {
+  background: linear-gradient(90deg, var(--accent-red-dim), var(--accent-red));
+}
+
+.progress-fill-green {
+  background: linear-gradient(90deg, var(--accent-green-dim), var(--accent-green));
+}
+
+.progress-fill-blue {
+  background: linear-gradient(90deg, #2a7a9e, var(--accent-blue));
+}
+
+.progress-fill-purple {
+  background: linear-gradient(90deg, #5e2d7a, var(--accent-purple));
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ── Form elements ───────────────────────────── */
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-family: var(--font-display);
+  font-size: 0.48rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.input-with-unit {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-unit input {
+  padding-right: 48px;
+}
+
+.input-unit {
+  position: absolute;
+  right: 12px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+/* ── Badge / chip ────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-gold {
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.badge-red {
+  background: rgba(230, 57, 70, 0.15);
+  color: var(--accent-red);
+  border: 1px solid rgba(230, 57, 70, 0.3);
+}
+
+.badge-green {
+  background: rgba(45, 198, 83, 0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(45, 198, 83, 0.3);
+}
+
+.badge-blue {
+  background: rgba(76, 201, 240, 0.15);
+  color: var(--accent-blue);
+  border: 1px solid rgba(76, 201, 240, 0.3);
+}
+
+.badge-gray {
+  background: rgba(122, 124, 154, 0.15);
+  color: var(--text-muted);
+  border: 1px solid rgba(122, 124, 154, 0.3);
+}
+
+/* ── Item rows ───────────────────────────────── */
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.item-row:last-child {
+  border-bottom: none;
+}
+
+.item-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+}
+
+.item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.item-right {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* ── Collapsible section ─────────────────────── */
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.collapsible-title {
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.collapsible-chevron {
+  color: var(--text-muted);
+  transition: transform var(--transition);
+  font-size: 0.8rem;
+}
+
+.collapsible-header.open .collapsible-chevron {
+  transform: rotate(180deg);
+}
+
+.collapsible-body {
+  padding-top: 8px;
+}
+
+.collapsible-body.closed {
+  display: none;
+}
+
+/* ── Empty state ─────────────────────────────── */
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.empty-state-text {
+  font-size: 0.85rem;
+}
+
+/* ── Delete button for dynamic list items ─────── */
+
+.item-delete {
+  min-height: 36px;
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(230, 57, 70, 0.12);
+  color: var(--accent-red);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+
+.item-delete:active {
+  background: rgba(230, 57, 70, 0.3);
+}
+
+/* ── Inline add-entry row ─────────────────────── */
+
+.add-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--accent-blue);
+  font-size: 0.85rem;
+  transition: all var(--transition);
+  min-height: 48px;
+  margin-top: 8px;
+}
+
+.add-entry-row:active {
+  background: var(--bg-card);
+}
+
+/* ── Scrollable horizontal chips ─────────────── */
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 99px;
+  border: 1px solid var(--border-bright);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.chip.selected {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
