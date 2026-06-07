@@ -329,7 +329,7 @@ const Quests = (() => {
       }
 
       // Rotate weekly quests on Monday or if never set
-      const isMonday = new Date(today).getDay() === 1;
+      const isMonday = new Date(today + 'T00:00:00').getDay() === 1;
       const currentWeeklyRefresh = state.lastWeeklyRefresh;
       const needsWeeklyRotation = !currentWeeklyRefresh || (isMonday && currentWeeklyRefresh !== weekStart);
       if (needsWeeklyRotation) {

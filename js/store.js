@@ -12,8 +12,15 @@ const Store = (() => {
     localStorage.setItem(PREFIX + key, JSON.stringify(value));
   }
 
+  // Format a Date as a local YYYY-MM-DD string. Using toISOString() would
+  // emit the UTC date, which causes "today" to roll over at UTC midnight
+  // instead of the user's local midnight.
+  function formatLocalDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+    return formatLocalDate(new Date());
   }
 
   function makePlayer(name, dailyCalories, dailyProteinG, dailyCarbsG, dailyFatsG, dailyAddedSugarMaxG) {
@@ -221,7 +228,7 @@ const Store = (() => {
       const day = d.getDay(); // 0=Sun, 1=Mon...
       const diff = (day === 0) ? -6 : 1 - day; // Monday as week start
       d.setDate(d.getDate() + diff);
-      return d.toISOString().slice(0, 10);
+      return formatLocalDate(d);
     },
 
     // Returns the lowercase weekday key for a given date (or today)

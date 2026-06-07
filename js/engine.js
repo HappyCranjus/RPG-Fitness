@@ -549,7 +549,7 @@ const Engine = (() => {
 
     const cycleEnd = new Date(player.cycleStart + 'T00:00:00');
     cycleEnd.setDate(cycleEnd.getDate() + CYCLE_DAYS - 1);
-    const cycleEndISO = cycleEnd.toISOString().slice(0, 10);
+    const cycleEndISO = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, '0')}-${String(cycleEnd.getDate()).padStart(2, '0')}`;
 
     const statSum = (player.stats.STR || 0) + (player.stats.AGI || 0) + (player.stats.VIT || 0);
     Store.appendCycleHistory({
