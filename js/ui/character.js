@@ -4,7 +4,26 @@
    discipline tier, and achievements.
    ───────────────────────────────────────────── */
 
-function renderCharacter(container) {
+function renderCharacter(container, params) {
+  const tab = (params && params.tab === 'data') ? 'data' : 'character';
+  if (tab === 'data') {
+    renderCharacterData(container);
+    return;
+  }
+  container.innerHTML = `${characterTabsHtml('character')}<div id="character-body"></div>`;
+  renderCharacterBody(document.getElementById('character-body'));
+}
+
+function characterTabsHtml(active) {
+  return `
+    <div class="seg-tabs">
+      <a class="seg ${active === 'character' ? 'on' : ''}" href="#character">CHARACTER</a>
+      <a class="seg ${active === 'data' ? 'on' : ''}" href="#character?tab=data">📊 DATA</a>
+    </div>
+  `;
+}
+
+function renderCharacterBody(container) {
   const player  = Store.getPlayer();
   const derived = Engine.getDerivedStats(player);
   const achs    = Achievements.getAll();
@@ -139,13 +158,15 @@ function renderCharacter(container) {
     <div class="card" style="border-color:${tierInfo.tier.color};">
       <div class="card-title" style="color:${tierInfo.tier.color};">DISCIPLINE — ${tierInfo.tier.label.toUpperCase()}</div>
       <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;margin-bottom:10px;">
-        Today's behavior × ${tierInfo.tier.mult.toFixed(2)} on all stat decay. ${tierInfo.points}/4 credits earned today.
+        Today's behavior × ${tierInfo.tier.mult.toFixed(2)} on all stat decay. ${tierInfo.points}/${tierInfo.maxPoints ?? 6} credits earned today.
       </div>
       <div class="tier-credits">
         ${credit('Workout logged', tierInfo.credits.showUp)}
-        ${credit('Protein hit', tierInfo.credits.protein)}
-        ${credit('Calories ±10%', tierInfo.credits.calories)}
-        ${credit(`Sugar ≤ ${player.goals.dailyAddedSugarMaxG ?? 36}g (${tierInfo.totals.sugar}g so far)`, tierInfo.credits.sugar)}
+        ${credit(`Calories ±10% (${Math.round(tierInfo.totals.calories)}/${player.goals.dailyCalories})`, tierInfo.credits.calories)}
+        ${credit(`Protein ≥ ${player.goals.dailyProteinG}g (${Math.round(tierInfo.totals.protein)}g)`, tierInfo.credits.protein)}
+        ${credit(`Fiber ≥ ${player.goals.dailyFiberG}g (${Math.round(tierInfo.totals.fiber)}g) AND Water ≥ ${player.goals.dailyWaterOz}oz (${Math.round(tierInfo.totals.water)}oz)`, tierInfo.credits.fiberWater)}
+        ${credit('Weigh-in logged 4am–12pm', tierInfo.credits.weighIn)}
+        ${credit('Sleep ≥ 7h & quality ≥ 3★', tierInfo.credits.sleep)}
       </div>
     </div>
 
@@ -196,6 +217,87 @@ function renderCharacter(container) {
     <button class="btn btn-secondary" onclick="Router.navigate('history')">📋 View History</button>
     <button class="btn btn-secondary mt-8" onclick="Router.navigate('schedule')">📅 Weekly Schedule</button>
     <button class="btn btn-secondary mt-8" onclick="Router.navigate('settings')">⚙️ Settings</button>
+  `;
+}
+
+/* ── DATA sub-screen — charts for weight, sleep, stats ── */
+
+function renderCharacterData(container) {
+  const player = Store.getPlayer();
+  const weightLog  = Store.getWeightLog();
+  const sleepLog   = Store.getSleepLog();
+  const statHist   = Store.getStatHistory();
+
+  // Weight chart: last 90 days, oldest→newest for the line chart.
+  const sliceDays = (rows, n) => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - n);
+    const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,'0')}-${String(cutoff.getDate()).padStart(2,'0')}`;
+    return rows.filter(r => r.date >= cutoffStr).sort((a,b) => a.date.localeCompare(b.date));
+  };
+
+  const weightSeries = sliceDays(weightLog, 90).map(r => ({ x: r.date, y: r.lbs }));
+  const sleepSeries  = sliceDays(sleepLog, 30).map(r => ({ x: r.date, y: r.hours }));
+  const statSeries   = sliceDays(statHist, 90).map(s => ({ x: s.date, y: s.sum }));
+
+  const weightTarget = player.goals.weightTargetLbs;
+  const targetLine = weightTarget
+    ? `<div class="chart-meta"><span>target: ${weightTarget} lbs</span></div>` : '';
+
+  const sleepAvgQuality = sleepLog.length > 0
+    ? (sleepLog.slice(0, 30).reduce((s, r) => s + r.quality, 0) / Math.min(30, sleepLog.length))
+    : 0;
+  const avgStars = sleepAvgQuality
+    ? '★'.repeat(Math.round(sleepAvgQuality)) + '☆'.repeat(5 - Math.round(sleepAvgQuality))
+    : '—';
+
+  const weightCard = weightSeries.length === 0
+    ? emptyDataCard('Weight', '📏', 'No weigh-ins yet. Log one from the dashboard.')
+    : `
+      <div class="card mb-12">
+        <div class="card-title">📏 WEIGHT — last ${weightSeries.length} day${weightSeries.length === 1 ? '' : 's'}</div>
+        ${svgLineChart(weightSeries, '#4cc9f0', '')}
+        ${targetLine}
+      </div>
+    `;
+
+  const sleepCard = sleepSeries.length === 0
+    ? emptyDataCard('Sleep', '🌙', 'No sleep logged yet. Log it from the dashboard.')
+    : `
+      <div class="card mb-12">
+        <div class="card-title">🌙 SLEEP — last ${sleepSeries.length} night${sleepSeries.length === 1 ? '' : 's'}</div>
+        ${svgLineChart(sleepSeries, '#b388ff', '')}
+        <div class="chart-meta">
+          <span>avg quality: <span style="color:var(--accent-gold);">${avgStars}</span></span>
+          <span>avg hours: ${(sleepSeries.reduce((s,p)=>s+p.y,0) / sleepSeries.length).toFixed(1)}h</span>
+        </div>
+      </div>
+    `;
+
+  const statCard = statSeries.length === 0
+    ? emptyDataCard('Stats', '⚔️', 'Train to start tracking stat-sum over time.')
+    : `
+      <div class="card mb-12">
+        <div class="card-title">⚔️ STAT SUM — last ${statSeries.length} day${statSeries.length === 1 ? '' : 's'}</div>
+        ${svgLineChart(statSeries, '#ffd700', '')}
+      </div>
+    `;
+
+  container.innerHTML = `
+    ${characterTabsHtml('data')}
+    ${weightCard}
+    ${sleepCard}
+    ${statCard}
+    <button class="btn btn-secondary mt-8" onclick="Router.navigate('history')">📋 Full log history</button>
+  `;
+}
+
+function emptyDataCard(label, icon, msg) {
+  return `
+    <div class="card mb-12">
+      <div class="card-title">${icon} ${label.toUpperCase()}</div>
+      <div class="muted-text" style="font-size:0.8rem;padding:14px 0;text-align:center;">${msg}</div>
+    </div>
   `;
 }
 

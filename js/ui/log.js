@@ -154,7 +154,7 @@ function renderLog(container) {
   };
 
   document.getElementById('add-meal-btn').onclick = () => {
-    logState.meals.push({ name: '', calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, addedSugarG: 0, mealType: 'lunch' });
+    logState.meals.push({ name: '', calories: 0, proteinG: 0, fiberG: 0, carbsG: 0, fatsG: 0, addedSugarG: 0, mealType: 'lunch' });
     renderMealRow(logState.meals.length - 1);
     updatePreview();
   };
@@ -208,6 +208,7 @@ function applyMealTemplate(id) {
     name:        t.name || '',
     calories:    t.calories || 0,
     proteinG:    t.proteinG || 0,
+    fiberG:      t.fiberG || 0,
     carbsG:      t.carbsG || 0,
     fatsG:       t.fatsG || 0,
     addedSugarG: t.addedSugarG || 0,
@@ -504,29 +505,39 @@ function renderMealRow(idx) {
         </div>
       </div>
     </div>
-    <div class="form-row mt-8">
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Carbs (optional)</label>
-        <div class="input-with-unit">
-          <input type="number" id="meal-carbs-${idx}" value="${entry.carbsG||''}" placeholder="0" min="0">
-          <span class="input-unit">g</span>
-        </div>
-      </div>
-      <div class="form-group" style="margin:0;">
-        <label class="form-label">Fats (optional)</label>
-        <div class="input-with-unit">
-          <input type="number" id="meal-fats-${idx}" value="${entry.fatsG||''}" placeholder="0" min="0">
-          <span class="input-unit">g</span>
-        </div>
-      </div>
-    </div>
     <div class="form-group" style="margin:8px 0 0;">
-      <label class="form-label">Added Sugar (2 HP per gram over the daily limit)</label>
+      <label class="form-label">Fiber</label>
       <div class="input-with-unit">
-        <input type="number" id="meal-sugar-${idx}" value="${entry.addedSugarG||''}" placeholder="0" min="0">
+        <input type="number" id="meal-fiber-${idx}" value="${entry.fiberG||''}" placeholder="0" min="0">
         <span class="input-unit">g</span>
       </div>
     </div>
+    <details class="meal-extra-macros" style="margin-top:8px;">
+      <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);">Other macros (optional)</summary>
+      <div class="form-row mt-8">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Carbs</label>
+          <div class="input-with-unit">
+            <input type="number" id="meal-carbs-${idx}" value="${entry.carbsG||''}" placeholder="0" min="0">
+            <span class="input-unit">g</span>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Fats</label>
+          <div class="input-with-unit">
+            <input type="number" id="meal-fats-${idx}" value="${entry.fatsG||''}" placeholder="0" min="0">
+            <span class="input-unit">g</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-group" style="margin:8px 0 0;">
+        <label class="form-label">Added Sugar (2 HP per gram over the daily limit)</label>
+        <div class="input-with-unit">
+          <input type="number" id="meal-sugar-${idx}" value="${entry.addedSugarG||''}" placeholder="0" min="0">
+          <span class="input-unit">g</span>
+        </div>
+      </div>
+    </details>
     <div id="meal-quality-${idx}" class="meal-quality" style="display:none;"></div>
   `;
 
@@ -538,6 +549,7 @@ function renderMealRow(idx) {
     logState.meals[idx].carbsG      = parseInt(document.getElementById('meal-carbs-' + idx)?.value) || 0;
     logState.meals[idx].fatsG       = parseInt(document.getElementById('meal-fats-' + idx)?.value) || 0;
     logState.meals[idx].addedSugarG = parseInt(document.getElementById('meal-sugar-' + idx)?.value) || 0;
+    logState.meals[idx].fiberG      = parseInt(document.getElementById('meal-fiber-' + idx)?.value) || 0;
 
     const m = logState.meals[idx];
     const qualEl = document.getElementById('meal-quality-' + idx);
@@ -565,6 +577,7 @@ function renderMealRow(idx) {
   document.getElementById('meal-type-' + idx).onchange  = update;
   document.getElementById('meal-cal-'  + idx).oninput   = update;
   document.getElementById('meal-prot-' + idx).oninput   = update;
+  document.getElementById('meal-fiber-' + idx).oninput  = update;
   document.getElementById('meal-carbs-' + idx).oninput  = update;
   document.getElementById('meal-fats-'  + idx).oninput  = update;
   document.getElementById('meal-sugar-' + idx).oninput  = update;
@@ -810,7 +823,7 @@ function showResultModal(results) {
   const tierRow = tier ? `
     <div class="result-row">
       <span class="result-label">📊 Discipline tier</span>
-      <span class="result-value" style="color:${tier.tier.color}">${tier.tier.label} (${tier.points}/4) × ${tier.tier.mult.toFixed(2)}</span>
+      <span class="result-value" style="color:${tier.tier.color}">${tier.tier.label} (${tier.points}/${tier.maxPoints ?? 6}) × ${tier.tier.mult.toFixed(2)}</span>
     </div>
   ` : '';
 

@@ -25,6 +25,8 @@ function renderDashboard(container) {
   const bonus    = Engine.getActiveBonus(Date.now());
   const heroHtml = renderStatsHero(player, today);
   const macroHtml = renderMacroCard(player, totals);
+  const weighInHtml = renderWeighInWidget(player);
+  const sleepHtml = renderSleepWidget();
   const momentumHtml = renderStatMomentumCard(player, totals, tierInfo);
   const bonusHtml = renderBonusBanner(bonus, Date.now());
   const forecastHtml = renderHpForecast(player);
@@ -39,6 +41,10 @@ function renderDashboard(container) {
   container.innerHTML = `
     ${heroHtml}
     ${macroHtml}
+    <div class="daily-widget-grid">
+      ${weighInHtml}
+      ${sleepHtml}
+    </div>
     ${momentumHtml}
     ${forecastHtml}
     ${bonusHtml}
@@ -177,9 +183,9 @@ function renderStatsHero(player, today) {
 /* ── Discipline tier banner ─────────────────────── */
 
 function renderTierBanner(tierInfo, player) {
-  const sugarMax = player.goals.dailyAddedSugarMaxG ?? 36;
-  const dots = ['showUp', 'protein', 'calories', 'sugar']
+  const dots = ['showUp', 'calories', 'protein', 'fiberWater', 'weighIn', 'sleep']
     .map(k => `<span class="tier-dot ${tierInfo.credits[k] ? 'on' : 'off'}"></span>`).join('');
+  const max = tierInfo.maxPoints ?? 6;
   return `
     <div class="tier-banner" style="border-color:${tierInfo.tier.color};color:${tierInfo.tier.color};" onclick="Router.navigate('character')">
       <div class="tier-banner-row">
@@ -189,7 +195,7 @@ function renderTierBanner(tierInfo, player) {
       </div>
       <div class="tier-banner-row tier-banner-credits">
         ${dots}
-        <span class="tier-banner-credits-text">${tierInfo.points}/4 today — sugar ${tierInfo.totals.sugar}/${sugarMax}g</span>
+        <span class="tier-banner-credits-text">${tierInfo.points}/${max} today</span>
       </div>
     </div>
   `;
@@ -255,18 +261,6 @@ function renderMacroCard(player, totals) {
   const g = player.goals;
   const sugarMax = g.dailyAddedSugarMaxG ?? 36;
 
-  const noMeals = totals.calories === 0 && totals.protein === 0
-                && totals.carbs === 0 && totals.fats === 0 && totals.sugar === 0;
-
-  if (noMeals) {
-    return `
-      <div class="card macro-card">
-        <div class="card-title" style="margin-bottom:6px;">TODAY'S NUTRITION</div>
-        <div class="muted-text" style="font-size:0.8rem;">No meals logged yet today — tap LOG below.</div>
-      </div>
-    `;
-  }
-
   function row(label, icon, current, goal, color, unit, opts = {}) {
     const goalSet = goal > 0;
     const pct = goalSet ? Math.round((current / goal) * 100) : 0;
@@ -292,17 +286,177 @@ function renderMacroCard(player, totals) {
   }
 
   const sugarOver = totals.sugar > sugarMax;
+  const waterOz = totals.water || 0;
+  const fiberG = totals.fiber || 0;
+
+  const waterChips = `
+    <div class="water-chips">
+      <button class="water-chip" onclick="quickAddWater(8)">+8 oz</button>
+      <button class="water-chip" onclick="quickAddWater(16)">+16 oz</button>
+      <button class="water-chip" onclick="quickAddWater(24)">+24 oz</button>
+      <button class="water-chip" onclick="promptCustomWater()">Custom…</button>
+    </div>
+  `;
 
   return `
     <div class="card macro-card">
       <div class="card-title" style="margin-bottom:10px;">TODAY'S NUTRITION</div>
-      ${row('Calories', '🔥', totals.calories, g.dailyCalories || 0, 'progress-fill-gold', '')}
-      ${row('Protein',  '🥩', totals.protein,  g.dailyProteinG || 0, 'progress-fill-red',  'g')}
-      ${row('Carbs',    '🌾', totals.carbs,    g.dailyCarbsG  || 0, 'progress-fill-blue', 'g')}
-      ${row('Fats',     '🥑', totals.fats,     g.dailyFatsG   || 0, 'progress-fill-purple','g')}
-      ${row('Sugar',    '🍬', totals.sugar,    sugarMax,            'progress-fill-green','g', { over: sugarOver })}
+      ${row('Calories', '🔥', Math.round(totals.calories), g.dailyCalories || 0, 'progress-fill-gold',  '')}
+      ${row('Protein',  '🥩', Math.round(totals.protein),  g.dailyProteinG || 0, 'progress-fill-red',   'g')}
+      ${row('Fiber',    '🌿', Math.round(fiberG),          g.dailyFiberG   || 0, 'progress-fill-green', 'g')}
+      ${row('Water',    '💧', Math.round(waterOz),         g.dailyWaterOz  || 0, 'progress-fill-blue',  'oz')}
+      ${waterChips}
+      <details class="macro-extra" style="margin-top:10px;">
+        <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);">Other macros</summary>
+        <div style="margin-top:10px;">
+          ${row('Carbs', '🌾', Math.round(totals.carbs), g.dailyCarbsG || 0, 'progress-fill-blue',  'g')}
+          ${row('Fats',  '🥑', Math.round(totals.fats),  g.dailyFatsG  || 0, 'progress-fill-purple','g')}
+          ${row('Sugar', '🍬', Math.round(totals.sugar), sugarMax,           'progress-fill-green', 'g', { over: sugarOver })}
+        </div>
+      </details>
     </div>
   `;
+}
+
+/* ── Quick-add water helpers ───────────────────── */
+
+function quickAddWater(oz) {
+  if (!Number.isFinite(oz) || oz <= 0) return;
+  Store.addWaterOz(oz);
+  Router.refresh();
+}
+
+function promptCustomWater() {
+  const raw = prompt('Add custom amount of water (oz):', '8');
+  if (raw === null) return;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0 || n > 256) {
+    Toast.show('Enter 1–256 oz.', 'info');
+    return;
+  }
+  Store.addWaterOz(n);
+  Router.refresh();
+}
+
+/* ── Weigh-in widget ───────────────────────────── */
+
+function renderWeighInWidget(player) {
+  const today = Store.getWeightToday();
+  const inWindow = Engine.isWeighInWindow();
+  const goal = player.goals.weightTargetLbs;
+  const goalLine = goal ? ` · target ${goal} lbs` : '';
+
+  if (today) {
+    const t = new Date(today.loggedAt);
+    const hh = String(t.getHours()).padStart(2, '0');
+    const mm = String(t.getMinutes()).padStart(2, '0');
+    const wasInWindow = Engine.isWeighInWindow(t);
+    return `
+      <div class="daily-widget weigh-widget">
+        <div class="daily-widget-row">
+          <span class="daily-widget-icon">📏</span>
+          <div class="daily-widget-main">
+            <div class="daily-widget-value">${today.lbs} lbs ${wasInWindow ? '✓' : '<span style="color:var(--accent-red);">(late)</span>'}</div>
+            <div class="daily-widget-sub">logged ${hh}:${mm}${goalLine}</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="promptWeighIn()">Re-log</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const windowHint = inWindow
+    ? `<span style="color:var(--accent-gold);">✦ Morning window open (4am–12pm) — log now for DIS credit.</span>`
+    : `<span style="color:var(--text-muted);">Outside 4am–12pm window — entries chart but won't earn DIS credit today.</span>`;
+  return `
+    <div class="daily-widget weigh-widget">
+      <div class="daily-widget-row">
+        <span class="daily-widget-icon">📏</span>
+        <div class="daily-widget-main">
+          <div class="daily-widget-value">Weigh-in not logged</div>
+          <div class="daily-widget-sub">${windowHint}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="promptWeighIn()">Log</button>
+      </div>
+    </div>
+  `;
+}
+
+function promptWeighIn() {
+  const existing = Store.getWeightToday();
+  const raw = prompt('Weigh-in (lbs):', existing ? String(existing.lbs) : '');
+  if (raw === null) return;
+  const lbs = parseFloat(raw);
+  if (!Number.isFinite(lbs) || lbs <= 50 || lbs >= 500) {
+    Toast.show('Enter a weight between 50 and 500 lbs.', 'info');
+    return;
+  }
+  Store.setWeightToday(lbs);
+  if (Engine.isWeighInWindow()) {
+    Toast.show('Weigh-in saved — DIS credit earned.', 'success');
+  } else {
+    Toast.show('Weigh-in saved (outside morning window — no DIS credit).', 'info');
+  }
+  Router.refresh();
+}
+
+/* ── Sleep widget ───────────────────────────────── */
+
+function renderSleepWidget() {
+  const s = Store.getSleepToday();
+  if (s) {
+    const stars = '★'.repeat(s.quality) + '☆'.repeat(5 - s.quality);
+    const credit = (s.hours >= 7 && s.quality >= 3) ? '✓' : '<span style="color:var(--accent-red);">(no credit)</span>';
+    return `
+      <div class="daily-widget sleep-widget">
+        <div class="daily-widget-row">
+          <span class="daily-widget-icon">🌙</span>
+          <div class="daily-widget-main">
+            <div class="daily-widget-value">${s.hours}h ${credit}</div>
+            <div class="daily-widget-sub" style="color:var(--accent-gold);">${stars}</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="promptSleep()">Re-log</button>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="daily-widget sleep-widget">
+      <div class="daily-widget-row">
+        <span class="daily-widget-icon">🌙</span>
+        <div class="daily-widget-main">
+          <div class="daily-widget-value">Sleep not logged</div>
+          <div class="daily-widget-sub" style="color:var(--text-muted);">Credit: ≥7h & ≥3★</div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="promptSleep()">Log</button>
+      </div>
+    </div>
+  `;
+}
+
+function promptSleep() {
+  const existing = Store.getSleepToday();
+  const rawHrs = prompt('Hours slept last night (e.g. 7.5):', existing ? String(existing.hours) : '');
+  if (rawHrs === null) return;
+  const hours = parseFloat(rawHrs);
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 16) {
+    Toast.show('Enter hours between 0 and 16.', 'info');
+    return;
+  }
+  const rawQ = prompt('Quality 1–5 stars (1=poor, 5=great):', existing ? String(existing.quality) : '3');
+  if (rawQ === null) return;
+  const quality = parseInt(rawQ, 10);
+  if (!Number.isFinite(quality) || quality < 1 || quality > 5) {
+    Toast.show('Enter quality between 1 and 5.', 'info');
+    return;
+  }
+  Store.setSleepToday(hours, quality);
+  if (hours >= 7 && quality >= 3) {
+    Toast.show('Sleep logged — DIS credit earned.', 'success');
+  } else {
+    Toast.show('Sleep logged.', 'info');
+  }
+  Router.refresh();
 }
 
 /* ── Stat momentum card (today's gain vs decay) ─── */

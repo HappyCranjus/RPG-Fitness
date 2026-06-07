@@ -32,36 +32,68 @@ function renderSettings(container) {
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Max Added Sugar (per day)</label>
-        <div class="input-with-unit">
-          <input type="number" id="settings-sugar" value="${player.goals.dailyAddedSugarMaxG ?? 36}" min="0" max="500">
-          <span class="input-unit">g</span>
-        </div>
-        <div class="muted-text" style="font-size:0.72rem;margin-top:4px;line-height:1.4;">
-          Going over deals HP damage (${Engine.SUGAR_DMG_PER_GRAM} HP per gram over). Staying under earns a discipline credit.
-        </div>
-      </div>
-
       <div class="form-row">
         <div class="form-group" style="margin:0;">
-          <label class="form-label">Carbs Goal (optional)</label>
+          <label class="form-label">Daily Fiber Goal</label>
           <div class="input-with-unit">
-            <input type="number" id="settings-carbs" value="${player.goals.dailyCarbsG || 0}" min="0" max="999">
+            <input type="number" id="settings-fiber" value="${player.goals.dailyFiberG ?? 30}" min="0" max="200">
             <span class="input-unit">g</span>
           </div>
         </div>
         <div class="form-group" style="margin:0;">
-          <label class="form-label">Fats Goal (optional)</label>
+          <label class="form-label">Daily Water Goal</label>
           <div class="input-with-unit">
-            <input type="number" id="settings-fats" value="${player.goals.dailyFatsG || 0}" min="0" max="999">
-            <span class="input-unit">g</span>
+            <input type="number" id="settings-water" value="${player.goals.dailyWaterOz ?? 64}" min="0" max="256">
+            <span class="input-unit">oz</span>
           </div>
         </div>
       </div>
       <div class="muted-text" style="font-size:0.74rem;margin-top:-4px;margin-bottom:10px;">
-        Carbs and fats are tracked for your reference — they don't affect the discipline tier directly.
+        Hitting BOTH fiber and water targets earns one discipline credit.
       </div>
+
+      <div class="form-group">
+        <label class="form-label">Weight Target (optional)</label>
+        <div class="input-with-unit">
+          <input type="number" id="settings-weight-target" value="${player.goals.weightTargetLbs ?? ''}" min="50" max="500" placeholder="lbs">
+          <span class="input-unit">lbs</span>
+        </div>
+        <div class="muted-text" style="font-size:0.72rem;margin-top:4px;line-height:1.4;">
+          Shown as a reference line on the weight chart in DATA.
+        </div>
+      </div>
+
+      <details>
+        <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Advanced macros (carbs / fats / sugar)</summary>
+
+        <div class="form-row">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Carbs Goal</label>
+            <div class="input-with-unit">
+              <input type="number" id="settings-carbs" value="${player.goals.dailyCarbsG || 0}" min="0" max="999">
+              <span class="input-unit">g</span>
+            </div>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Fats Goal</label>
+            <div class="input-with-unit">
+              <input type="number" id="settings-fats" value="${player.goals.dailyFatsG || 0}" min="0" max="999">
+              <span class="input-unit">g</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group mt-8">
+          <label class="form-label">Max Added Sugar (per day)</label>
+          <div class="input-with-unit">
+            <input type="number" id="settings-sugar" value="${player.goals.dailyAddedSugarMaxG ?? 36}" min="0" max="500">
+            <span class="input-unit">g</span>
+          </div>
+          <div class="muted-text" style="font-size:0.72rem;margin-top:4px;line-height:1.4;">
+            Going over deals HP damage (${Engine.SUGAR_DMG_PER_GRAM} HP per gram over). Tracked but no longer a DIS credit.
+          </div>
+        </div>
+      </details>
 
       <button class="btn btn-primary" onclick="saveSettings()">SAVE CHANGES</button>
     </div>
@@ -121,6 +153,9 @@ function saveSettings() {
   const newName  = document.getElementById('settings-name')?.value.trim();
   const newCal   = parseInt(document.getElementById('settings-cal')?.value)   || player.goals.dailyCalories;
   const newProt  = parseInt(document.getElementById('settings-prot')?.value)  || player.goals.dailyProteinG;
+  const newFiber = parseInt(document.getElementById('settings-fiber')?.value);
+  const newWater = parseInt(document.getElementById('settings-water')?.value);
+  const newWTRaw = document.getElementById('settings-weight-target')?.value;
   const newCarbs = parseInt(document.getElementById('settings-carbs')?.value) || 0;
   const newFats  = parseInt(document.getElementById('settings-fats')?.value)  || 0;
   const newSugar = parseInt(document.getElementById('settings-sugar')?.value);
@@ -128,6 +163,11 @@ function saveSettings() {
   if (newName) player.name = newName;
   player.goals.dailyCalories = newCal;
   player.goals.dailyProteinG = newProt;
+  player.goals.dailyFiberG   = isNaN(newFiber) ? (player.goals.dailyFiberG ?? 30) : newFiber;
+  player.goals.dailyWaterOz  = isNaN(newWater) ? (player.goals.dailyWaterOz ?? 64) : newWater;
+  player.goals.weightTargetLbs = (newWTRaw === '' || newWTRaw == null)
+    ? null
+    : (parseFloat(newWTRaw) || null);
   player.goals.dailyCarbsG   = newCarbs;
   player.goals.dailyFatsG    = newFats;
   player.goals.dailyAddedSugarMaxG = isNaN(newSugar) ? (player.goals.dailyAddedSugarMaxG ?? 36) : newSugar;
@@ -144,6 +184,9 @@ function exportData() {
     quests:       Store.getQuests(),
     monsters:     Store.getMonsters(),
     achievements: Store.getAchievements(),
+    weightLog:    Store.getWeightLog(),
+    sleepLog:     Store.getSleepLog(),
+    waterLog:     Store.getWaterLog(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -172,6 +215,9 @@ function importData(event) {
       if (data.quests)      Store.setQuests(data.quests);
       if (data.monsters)    Store.setMonsters(data.monsters);
       if (data.achievements)Store.setAchievements(data.achievements);
+      if (data.weightLog)   localStorage.setItem('eapp_weightLog', JSON.stringify(data.weightLog));
+      if (data.sleepLog)    localStorage.setItem('eapp_sleepLog',  JSON.stringify(data.sleepLog));
+      if (data.waterLog)    localStorage.setItem('eapp_waterLog',  JSON.stringify(data.waterLog));
 
       Toast.show('Data imported successfully!', 'success');
       Router.navigate('dashboard');

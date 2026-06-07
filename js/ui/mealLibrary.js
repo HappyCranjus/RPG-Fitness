@@ -26,6 +26,7 @@ function renderMealLibraryList(container) {
         const macros = [
           `${t.calories || 0} cal`,
           t.proteinG ? `${t.proteinG}p` : null,
+          t.fiberG   ? `${t.fiberG}fb`  : null,
           t.carbsG   ? `${t.carbsG}c`   : null,
           t.fatsG    ? `${t.fatsG}f`    : null,
           t.addedSugarG ? `${t.addedSugarG}🍬` : null,
@@ -95,30 +96,41 @@ function renderMealLibraryEditForm(container, draft) {
         </div>
       </div>
 
-      <div class="form-row mt-8">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Carbs (optional)</label>
-          <div class="input-with-unit">
-            <input type="number" id="ml-carbs" value="${draft.carbsG || ''}" placeholder="0" min="0">
-            <span class="input-unit">g</span>
-          </div>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">Fats (optional)</label>
-          <div class="input-with-unit">
-            <input type="number" id="ml-fats" value="${draft.fatsG || ''}" placeholder="0" min="0">
-            <span class="input-unit">g</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-group mt-12">
-        <label class="form-label">Added Sugar</label>
+      <div class="form-group mt-8">
+        <label class="form-label">Fiber</label>
         <div class="input-with-unit">
-          <input type="number" id="ml-sugar" value="${draft.addedSugarG || ''}" placeholder="0" min="0">
+          <input type="number" id="ml-fiber" value="${draft.fiberG || ''}" placeholder="0" min="0">
           <span class="input-unit">g</span>
         </div>
       </div>
+
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-muted);">Other macros (optional)</summary>
+        <div class="form-row mt-8">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Carbs</label>
+            <div class="input-with-unit">
+              <input type="number" id="ml-carbs" value="${draft.carbsG || ''}" placeholder="0" min="0">
+              <span class="input-unit">g</span>
+            </div>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Fats</label>
+            <div class="input-with-unit">
+              <input type="number" id="ml-fats" value="${draft.fatsG || ''}" placeholder="0" min="0">
+              <span class="input-unit">g</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group mt-12">
+          <label class="form-label">Added Sugar</label>
+          <div class="input-with-unit">
+            <input type="number" id="ml-sugar" value="${draft.addedSugarG || ''}" placeholder="0" min="0">
+            <span class="input-unit">g</span>
+          </div>
+        </div>
+      </details>
 
       <div class="form-group">
         <label class="form-label">Default meal type</label>
@@ -141,6 +153,7 @@ function addNewMealTemplate() {
     name: '',
     calories: 0,
     proteinG: 0,
+    fiberG: 0,
     carbsG: 0,
     fatsG: 0,
     addedSugarG: 0,
@@ -177,6 +190,7 @@ function saveMealTemplate() {
     name,
     calories:    parseInt(document.getElementById('ml-cal')?.value)   || 0,
     proteinG:    parseInt(document.getElementById('ml-prot')?.value)  || 0,
+    fiberG:      parseInt(document.getElementById('ml-fiber')?.value) || 0,
     carbsG:      parseInt(document.getElementById('ml-carbs')?.value) || 0,
     fatsG:       parseInt(document.getElementById('ml-fats')?.value)  || 0,
     addedSugarG: parseInt(document.getElementById('ml-sugar')?.value) || 0,

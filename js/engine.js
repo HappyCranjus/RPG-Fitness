@@ -373,24 +373,36 @@ const Engine = (() => {
   ─────────────────────────────────────────── */
 
   const TIER_DEF = [
-    { pts: 0, label: 'Very Low',  short: 'VL', mult: 1.5, color: '#e63946' },
-    { pts: 1, label: 'Low',       short: 'L',  mult: 1.2, color: '#ff8c00' },
-    { pts: 2, label: 'Moderate',  short: 'M',  mult: 1.0, color: '#ffd700' },
-    { pts: 3, label: 'High',      short: 'H',  mult: 0.8, color: '#9aa75c' },
-    { pts: 4, label: 'Very High', short: 'VH', mult: 0.6, color: '#2dc653' },
+    { pts: 0, label: 'Very Low',  short: 'VL', mult: 1.50, color: '#e63946' },
+    { pts: 1, label: 'Low',       short: 'L',  mult: 1.35, color: '#f4623a' },
+    { pts: 2, label: 'Low-Mod',   short: 'LM', mult: 1.20, color: '#ff8c00' },
+    { pts: 3, label: 'Moderate',  short: 'M',  mult: 1.05, color: '#ffd700' },
+    { pts: 4, label: 'Mod-High',  short: 'MH', mult: 0.95, color: '#cdd13d' },
+    { pts: 5, label: 'High',      short: 'H',  mult: 0.80, color: '#9aa75c' },
+    { pts: 6, label: 'Very High', short: 'VH', mult: 0.60, color: '#2dc653' },
   ];
+  const MAX_DIS_POINTS = TIER_DEF.length - 1;
 
   function tierFor(points) {
-    const p = Math.max(0, Math.min(4, points));
+    const p = Math.max(0, Math.min(MAX_DIS_POINTS, points));
     return TIER_DEF[p];
+  }
+
+  // Morning weigh-in window: 4am inclusive → 12pm exclusive (local time).
+  function isWeighInWindow(d) {
+    d = d || new Date();
+    const h = d.getHours();
+    return h >= 4 && h < 12;
   }
 
   function disciplineTier(player, todayLog) {
     const credits = {
-      showUp:   false,
-      protein:  false,
-      calories: false,
-      sugar:    false,
+      showUp:     false,
+      calories:   false,
+      protein:    false,
+      fiberWater: false,
+      weighIn:    false,
+      sleep:      false,
     };
     if (!Array.isArray(todayLog)) todayLog = [];
 
@@ -411,18 +423,54 @@ const Engine = (() => {
       credits.calories = true;
     }
 
-    const totalSugar = todayLog.reduce((s, e) =>
-      s + (e.meals || []).reduce((ms, m) => ms + (m.addedSugarG || 0), 0), 0);
-    const sugarMax = player.goals.dailyAddedSugarMaxG ?? 36;
-    const anyMealsLogged = todayLog.some(e => (e.meals || []).length > 0);
-    if (anyMealsLogged && totalSugar <= sugarMax) {
-      credits.sugar = true;
+    const totalFiber = todayLog.reduce((s, e) =>
+      s + (e.meals || []).reduce((ms, m) => ms + (m.fiberG || 0), 0), 0);
+    const totalWater = (typeof Store !== 'undefined' && Store.getWaterToday)
+      ? Store.getWaterToday() : 0;
+    const fiberGoal = player.goals.dailyFiberG || 0;
+    const waterGoal = player.goals.dailyWaterOz || 0;
+    if (fiberGoal > 0 && waterGoal > 0 &&
+        totalFiber >= fiberGoal && totalWater >= waterGoal) {
+      credits.fiberWater = true;
     }
 
+    // Weigh-in credit: today's row must exist AND have been logged inside
+    // the morning window (judged from the row's loggedAt, not "now").
+    if (typeof Store !== 'undefined' && Store.getWeightToday) {
+      const w = Store.getWeightToday();
+      if (w && isWeighInWindow(new Date(w.loggedAt))) {
+        credits.weighIn = true;
+      }
+    }
+
+    // Sleep credit: today's row, >=7 hours, quality >=3.
+    if (typeof Store !== 'undefined' && Store.getSleepToday) {
+      const s = Store.getSleepToday();
+      if (s && s.hours >= 7 && s.quality >= 3) {
+        credits.sleep = true;
+      }
+    }
+
+    const totalSugar = todayLog.reduce((s, e) =>
+      s + (e.meals || []).reduce((ms, m) => ms + (m.addedSugarG || 0), 0), 0);
+
     const points = (credits.showUp?1:0) + (credits.protein?1:0)
-                 + (credits.calories?1:0) + (credits.sugar?1:0);
+                 + (credits.calories?1:0) + (credits.fiberWater?1:0)
+                 + (credits.weighIn?1:0) + (credits.sleep?1:0);
     const tier   = tierFor(points);
-    return { points, credits, tier, totals: { protein: totalProtein, calories: totalCal, sugar: totalSugar } };
+    return {
+      points,
+      maxPoints: MAX_DIS_POINTS,
+      credits,
+      tier,
+      totals: {
+        protein: totalProtein,
+        calories: totalCal,
+        fiber: totalFiber,
+        water: totalWater,
+        sugar: totalSugar,
+      },
+    };
   }
 
   /* ── 30-min stat decay tick (continuous, lazy) ──
@@ -921,7 +969,8 @@ const Engine = (() => {
 
   // Sum macro & stat-delta totals across a list of log entries from one day.
   function dailyTotals(todayLog) {
-    const t = { calories: 0, protein: 0, carbs: 0, fats: 0, sugar: 0,
+    const t = { calories: 0, protein: 0, carbs: 0, fats: 0, sugar: 0, fiber: 0,
+                water: 0,
                 accSTR: 0, accAGI: 0, accVIT: 0 };
     for (const e of (todayLog || [])) {
       for (const m of (e.meals || [])) {
@@ -930,12 +979,18 @@ const Engine = (() => {
         t.carbs    += m.carbsG      || 0;
         t.fats     += m.fatsG       || 0;
         t.sugar    += m.addedSugarG || 0;
+        t.fiber    += m.fiberG      || 0;
       }
       if (e.statDeltas) {
         t.accSTR += e.statDeltas.STR || 0;
         t.accAGI += e.statDeltas.AGI || 0;
         t.accVIT += e.statDeltas.VIT || 0;
       }
+    }
+    // Water lives in its own daily namespace; fold it into totals so
+    // every consumer (dashboard, momentum, tier) sees one snapshot.
+    if (typeof Store !== 'undefined' && Store.getWaterToday) {
+      t.water = Store.getWaterToday();
     }
     return t;
   }
@@ -995,6 +1050,8 @@ const Engine = (() => {
     applyStatDecay,
     disciplineTier,
     tierFor,
+    isWeighInWindow,
+    MAX_DIS_POINTS,
 
     // introspection
     daysUntilCycleEnd,

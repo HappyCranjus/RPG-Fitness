@@ -266,7 +266,7 @@ function updateStatHeader() {
     tierEl.textContent       = tierInfo.tier.short;
     tierEl.style.color       = tierInfo.tier.color;
     tierEl.style.borderColor = tierInfo.tier.color;
-    tierEl.title             = `Discipline: ${tierInfo.tier.label} (${tierInfo.points}/4) — decay × ${tierInfo.tier.mult.toFixed(1)}`;
+    tierEl.title             = `Discipline: ${tierInfo.tier.label} (${tierInfo.points}/${tierInfo.maxPoints ?? Engine.MAX_DIS_POINTS}) — decay × ${tierInfo.tier.mult.toFixed(2)}`;
   }
 
   updateHeaderCountdowns(player);

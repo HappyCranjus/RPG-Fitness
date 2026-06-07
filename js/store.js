@@ -45,6 +45,9 @@ const Store = (() => {
         dailyCarbsG:   Number(dailyCarbsG || 0),
         dailyFatsG:    Number(dailyFatsG || 0),
         dailyAddedSugarMaxG: Number(dailyAddedSugarMaxG || 36),
+        dailyFiberG:   30,
+        dailyWaterOz:  64,
+        weightTargetLbs: null,
       },
       cycleStart: today,
       cyclePeakLevel: 1,
@@ -142,6 +145,11 @@ const Store = (() => {
     if (p.goals && p.goals.dailyAddedSugarMaxG === undefined) {
       p.goals.dailyAddedSugarMaxG = 36;
     }
+    if (p.goals) {
+      if (p.goals.dailyFiberG  === undefined) p.goals.dailyFiberG  = 30;
+      if (p.goals.dailyWaterOz === undefined) p.goals.dailyWaterOz = 64;
+      if (p.goals.weightTargetLbs === undefined) p.goals.weightTargetLbs = null;
+    }
     return p;
   }
 
@@ -210,17 +218,81 @@ const Store = (() => {
     },
 
     getSettings() {
-      return get('settings') || { weightUnit: 'kg' };
+      return get('settings') || { weightUnit: 'lbs' };
     },
     setSettings(s) { set('settings', s); },
 
     getMealLibrary() { return get('mealLibrary') || []; },
     setMealLibrary(arr) { set('mealLibrary', arr); },
 
+    // ── Weight log: one row per day, lbs + loggedAt timestamp ──
+    getWeightLog() { return get('weightLog') || []; },
+    getWeightToday() {
+      const today = todayISO();
+      return (get('weightLog') || []).find(r => r.date === today) || null;
+    },
+    setWeightToday(lbs) {
+      const today = todayISO();
+      const log = get('weightLog') || [];
+      const idx = log.findIndex(r => r.date === today);
+      const row = { date: today, lbs: Number(lbs), loggedAt: Date.now() };
+      if (idx >= 0) log[idx] = row;
+      else log.unshift(row);
+      if (log.length > 365) log.splice(365);
+      set('weightLog', log);
+      return row;
+    },
+
+    // ── Sleep log: one row per day, hours + 1-5 star quality ──
+    getSleepLog() { return get('sleepLog') || []; },
+    getSleepToday() {
+      const today = todayISO();
+      return (get('sleepLog') || []).find(r => r.date === today) || null;
+    },
+    setSleepToday(hours, quality) {
+      const today = todayISO();
+      const log = get('sleepLog') || [];
+      const idx = log.findIndex(r => r.date === today);
+      const row = {
+        date: today,
+        hours: Number(hours),
+        quality: Math.max(1, Math.min(5, Number(quality))),
+        loggedAt: Date.now(),
+      };
+      if (idx >= 0) log[idx] = row;
+      else log.unshift(row);
+      if (log.length > 180) log.splice(180);
+      set('sleepLog', log);
+      return row;
+    },
+
+    // ── Water log: one row per day, ounces (mutate-in-place) ──
+    getWaterLog() { return get('waterLog') || []; },
+    getWaterToday() {
+      const today = todayISO();
+      const row = (get('waterLog') || []).find(r => r.date === today);
+      return row ? row.oz : 0;
+    },
+    setWaterToday(oz) {
+      const today = todayISO();
+      const log = get('waterLog') || [];
+      const idx = log.findIndex(r => r.date === today);
+      const row = { date: today, oz: Math.max(0, Number(oz) || 0) };
+      if (idx >= 0) log[idx] = row;
+      else log.unshift(row);
+      if (log.length > 180) log.splice(180);
+      set('waterLog', log);
+      return row.oz;
+    },
+    addWaterOz(n) {
+      const current = this.getWaterToday();
+      return this.setWaterToday(current + (Number(n) || 0));
+    },
+
     clearAll() {
       ['player','log','quests','monsters','achievements','settings',
        'attacks','cycleHistory','schedule','statHistory','bonus',
-       'mealLibrary'].forEach(k => {
+       'mealLibrary','weightLog','sleepLog','waterLog'].forEach(k => {
         localStorage.removeItem(PREFIX + k);
       });
     },
