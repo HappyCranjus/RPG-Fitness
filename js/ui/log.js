@@ -9,6 +9,7 @@ const ACTIVITY_DEFS = [
   { id: 'act_swim',    name: 'Swimming',           icon: '🏊', calPerMin: 9,  type: 'cardio' },
   { id: 'act_bball',   name: 'Basketball / Sports',icon: '🏀', calPerMin: 8,  type: 'sports' },
   { id: 'act_walkdog', name: 'Walking the Dog',    icon: '🐕', calPerMin: 4,  type: 'cardio' },
+  { id: 'act_sex',     name: 'Sex',                icon: '❤️', calPerMin: 5,  type: 'cardio' },
   { id: 'act_cycle',   name: 'Cycling',            icon: '🚴', calPerMin: 8,  type: 'cardio' },
   { id: 'act_hike',    name: 'Hiking',             icon: '🥾', calPerMin: 6,  type: 'cardio' },
   { id: 'act_yoga',    name: 'Yoga / Stretching',  icon: '🧘', calPerMin: 3,  type: 'misc' },
