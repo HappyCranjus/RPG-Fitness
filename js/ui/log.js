@@ -91,6 +91,17 @@ function renderLog(container) {
     <!-- Meals -->
     <div class="section" id="log-meals-section">
       <div class="section-label">Meals</div>
+
+      <div class="card mb-12" style="padding:10px 12px;">
+        <div class="section-label" style="margin-bottom:6px;">Quick-add from your library</div>
+        <select id="log-meal-template-picker" style="width:100%;">
+          ${buildMealTemplateOptions()}
+        </select>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px;line-height:1.3;">
+          Manage your library in Settings → Meal Library.
+        </div>
+      </div>
+
       <div id="sugar-running-row" style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:8px;">
         <span style="color:var(--text-muted);">🍬 Sugar today:</span>
         <span id="sugar-running-text" style="font-family:var(--font-display);font-size:0.5rem;color:var(--text-primary);">
@@ -154,11 +165,57 @@ function renderLog(container) {
     applyRoutine(e.target.value);
   };
 
+  const mealPicker = document.getElementById('log-meal-template-picker');
+  if (mealPicker) {
+    mealPicker.onchange = (e) => {
+      applyMealTemplate(e.target.value);
+      e.target.value = '';
+    };
+  }
+
   if (preselectRoutine) {
     applyRoutine(preselectRoutine);
   }
 
   updatePreview();
+}
+
+function buildMealTemplateOptions() {
+  const library = Store.getMealLibrary();
+  if (library.length === 0) {
+    return `<option value="">— No saved meals yet — add some in Settings →</option>`;
+  }
+  const sorted = [...library].sort((a, b) =>
+    (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
+  const opts = sorted.map(t => {
+    const macros = [
+      `${t.calories || 0}cal`,
+      t.proteinG ? `${t.proteinG}p` : null,
+      t.addedSugarG ? `${t.addedSugarG}🍬` : null,
+    ].filter(Boolean).join(' · ');
+    return `<option value="${escHtml(t.id)}">${escHtml(t.name || '(unnamed)')} — ${escHtml(macros)}</option>`;
+  }).join('');
+  return `<option value="">— Add custom meal —</option>${opts}`;
+}
+
+function applyMealTemplate(id) {
+  if (!id) return;
+  const t = Store.getMealLibrary().find(x => x.id === id);
+  if (!t) return;
+  // Copy the template's values into a fresh meal entry — later edits to the
+  // template don't propagate to already-logged meals.
+  logState.meals.push({
+    name:        t.name || '',
+    calories:    t.calories || 0,
+    proteinG:    t.proteinG || 0,
+    carbsG:      t.carbsG || 0,
+    fatsG:       t.fatsG || 0,
+    addedSugarG: t.addedSugarG || 0,
+    mealType:    t.mealType || 'lunch',
+  });
+  renderMealRow(logState.meals.length - 1);
+  updatePreview();
+  Toast.show(`Added "${t.name}"`, 'success');
 }
 
 function buildRoutineOptions(selected) {

@@ -67,6 +67,18 @@ function renderSettings(container) {
     </div>
 
     <div class="card mt-12">
+      <div class="card-title" style="margin-bottom:14px;">LIBRARY</div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Meal Library</div>
+          <div class="settings-sublabel">Save meals you eat often for one-tap logging</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="Router.navigate('meal-library')">Open</button>
+      </div>
+    </div>
+
+    <div class="card mt-12">
       <div class="card-title" style="margin-bottom:14px;">DATA</div>
 
       <div class="settings-row">

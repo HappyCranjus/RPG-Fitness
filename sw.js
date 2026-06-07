@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rpgfit-v12';
+const CACHE_NAME = 'rpgfit-v13';
 
 // Paths are relative to the service worker's location, so the app
 // works whether it's served from the domain root or a subpath
@@ -28,6 +28,7 @@ const PRECACHE_URLS = [
   './js/ui/history.js',
   './js/ui/schedule.js',
   './js/ui/settings.js',
+  './js/ui/mealLibrary.js',
 ];
 
 self.addEventListener('install', event => {

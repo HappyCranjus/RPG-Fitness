@@ -214,9 +214,13 @@ const Store = (() => {
     },
     setSettings(s) { set('settings', s); },
 
+    getMealLibrary() { return get('mealLibrary') || []; },
+    setMealLibrary(arr) { set('mealLibrary', arr); },
+
     clearAll() {
       ['player','log','quests','monsters','achievements','settings',
-       'attacks','cycleHistory','schedule','statHistory','bonus'].forEach(k => {
+       'attacks','cycleHistory','schedule','statHistory','bonus',
+       'mealLibrary'].forEach(k => {
         localStorage.removeItem(PREFIX + k);
       });
     },
