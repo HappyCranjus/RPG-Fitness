@@ -1,5 +1,7 @@
 /* ─────────────────────────────────────────────
-   Character screen — stats, derived stats, achievements
+   Character screen — 3-stat sheet with the new
+   curve bars, stat-role descriptions, decay rate,
+   discipline tier, and achievements.
    ───────────────────────────────────────────── */
 
 function renderCharacter(container) {
@@ -9,7 +11,8 @@ function renderCharacter(container) {
   const xpPct   = Math.min(100, Math.round((player.xp / player.xpToNextLevel) * 100));
   const rank    = Ranks.getRank(player);
   const today   = Store.today();
-  const decay   = Engine.statDecayStatus(player, today);
+  const todayLog = Store.getLog().filter(e => e.date === today);
+  const tierInfo = Engine.disciplineTier(player, todayLog);
   const daysLeft = Engine.daysUntilCycleEnd(player, today);
 
   const hp    = player.hp    ?? player.hpMax ?? 100;
@@ -21,40 +24,52 @@ function renderCharacter(container) {
 
   const statDefs = [
     { key: 'STR', barClass: 'stat-bar-str',
-      desc: 'Grows from bodyweight exercises (push-ups, squats, pull-ups). Higher STR = stronger attacks on the Combat screen.' },
+      role: `Attack damage (ATK = STR×5) + weakness amplifier (×${Engine.weaknessMultiplier(player.stats.STR).toFixed(2)} on monster weaknesses).`,
+      grow: 'Weighted lifts (Bench 0.12/rep, Pull-ups & Dips 0.10/rep), bodyweight reps, swimming.',
+      fastest: 'Bench Press / Pull-ups — best STR per rep. Push-ups bulk fast at 0.05/rep.',
+      decay: `${Engine.STAT_DECAY_PER_DAY.STR} acc/day × ${tierInfo.tier.mult.toFixed(2)} tier = ${(Engine.STAT_DECAY_PER_DAY.STR * tierInfo.tier.mult).toFixed(2)}/day.`,
+    },
     { key: 'AGI', barClass: 'stat-bar-agi',
-      desc: 'Grows from sports, basketball, and swimming. Higher AGI = larger energy pool and faster energy regen — so you can attack more often.' },
+      role: `Energy pool (${player.maxEnergy} max), regen (${(3 + player.stats.AGI * 0.5).toFixed(1)}/hr), and dodge chance (${Math.round(Math.min(0.5, player.stats.AGI * 0.015) * 100)}% per monster strike).`,
+      grow: 'Sports / Basketball (0.5/min, king), Yoga (0.4/min), Swimming (0.3/min), Burpees.',
+      fastest: 'Basketball or any sport — 30min = +15 AGI. Yoga is the indoor alternative.',
+      decay: `${Engine.STAT_DECAY_PER_DAY.AGI} acc/day × ${tierInfo.tier.mult.toFixed(2)} tier = ${(Engine.STAT_DECAY_PER_DAY.AGI * tierInfo.tier.mult).toFixed(2)}/day.`,
+    },
     { key: 'VIT', barClass: 'stat-bar-vit',
-      desc: 'Grows from cardio duration (jogging, swimming, walking). Raises your max HP. Your health ceiling = 100 + (VIT × 15).' },
-    { key: 'DIS', barClass: 'stat-bar-dis',
-      desc: 'Grows from consistency — logging every day, hitting protein and calorie targets, maintaining streaks. Does NOT grow from single sessions. Reduces junk food HP damage and scales protein-goal HP regen.' },
+      role: `Max HP (${hpMax}) + passive HP-decay resistance (${Math.round(Math.min(0.3, player.stats.VIT * 0.01) * 100)}% slower drain).`,
+      grow: 'Cardio: Hiking (0.5/min, king), Jogging & Cycling (0.4/min), Swimming (0.3/min). +0.5 per logged meal.',
+      fastest: 'Hiking + log every meal — densest gain plus the free-VIT-for-logging bonus.',
+      decay: `${Engine.STAT_DECAY_PER_DAY.VIT} acc/day × ${tierInfo.tier.mult.toFixed(2)} tier = ${(Engine.STAT_DECAY_PER_DAY.VIT * tierInfo.tier.mult).toFixed(2)}/day.`,
+    },
   ];
 
-  const statRows = statDefs.map(({ key, barClass, desc }) => {
+  const statRows = statDefs.map(({ key, barClass, role, grow, fastest, decay }) => {
     const val = player.stats[key];
     const acc = player.statPoints[key + '_acc'] || 0;
-    const pct = Math.min(100, Math.round(((acc % 10) / 10) * 100));
-    const d = decay[key];
-    let decayLabel = '';
-    if (d) {
-      if (d.isDecaying) {
-        decayLabel = `<div class="stat-decay-label decaying">💀 Decaying — idle ${d.idle}d</div>`;
-      } else if (d.decayingIn <= 1) {
-        decayLabel = `<div class="stat-decay-label imminent">⚠️ Decays in ${d.decayingIn}d</div>`;
-      }
-    }
+    const curve = Engine.statCurve.statFromAcc(acc);
+    const pct = Engine.statCurve.progressPct(acc);
     return `
       <div class="stat-row" style="align-items:start;">
         <span class="stat-name" style="padding-top:4px;">${key}</span>
         <div>
           <div class="stat-bar-track">
-            <div class="stat-bar-fill ${barClass}" style="width:${Math.min(100, val * 5)}%"></div>
-          </div>
-          <div class="progress-track" style="height:3px;margin-top:2px;opacity:0.4;">
             <div class="stat-bar-fill ${barClass}" style="width:${pct}%"></div>
           </div>
-          <div style="font-size:0.7rem;color:var(--text-dim);margin-top:3px;line-height:1.4;">${desc}</div>
-          ${decayLabel}
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;font-family:var(--font-display);font-size:0.4rem;letter-spacing:0.04em;">
+            ${curve.accIntoLevel.toFixed(2)} / ${curve.nextCost} → ${key} ${curve.stat + 1}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:6px;line-height:1.4;">
+            <strong style="color:var(--text-muted);">Does:</strong> ${role}
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-top:3px;line-height:1.4;">
+            <strong style="color:var(--text-muted);">Grow:</strong> ${grow}
+          </div>
+          <div style="font-size:0.7rem;color:var(--accent-gold);margin-top:3px;line-height:1.4;">
+            <strong>🏆 Fastest:</strong> ${fastest}
+          </div>
+          <div style="font-size:0.68rem;color:var(--accent-red-dim);margin-top:3px;line-height:1.4;">
+            <strong style="color:var(--accent-red);">Decay:</strong> ${decay}
+          </div>
         </div>
         <span class="stat-value" style="padding-top:4px;">${val}</span>
       </div>
@@ -63,6 +78,9 @@ function renderCharacter(container) {
 
   const totalSessions = (player.totalActivitiesLogged || 0) + (player.totalExercisesLogged || 0);
   const unlockedCount = achs.filter(a => a.unlocked).length;
+
+  // Tier card: shows credits + multiplier
+  const credit = (k, on) => `<span class="${on ? 'credit-on' : 'credit-off'}">${on ? '✅' : '⬜'} ${k}</span>`;
 
   container.innerHTML = `
     <!-- Player header -->
@@ -109,7 +127,7 @@ function renderCharacter(container) {
         <span style="font-family:var(--font-display);font-size:0.52rem;color:var(--text-primary);white-space:nowrap;">${hp} / ${hpMax}</span>
       </div>
       <div style="font-size:0.72rem;color:var(--text-dim);">
-        Max HP = 100 + (VIT × 15) — raise VIT through cardio to increase your health ceiling
+        Max HP = 100 + (VIT × 15) — raise VIT through cardio. Resist = ${Math.round(Math.min(0.3, player.stats.VIT * 0.01) * 100)}% slower passive drain.
       </div>
       ${player.knockedOut ? `
       <div style="font-size:0.78rem;color:var(--accent-red);margin-top:8px;">
@@ -117,10 +135,27 @@ function renderCharacter(container) {
       </div>` : ''}
     </div>
 
+    <!-- Discipline tier card -->
+    <div class="card" style="border-color:${tierInfo.tier.color};">
+      <div class="card-title" style="color:${tierInfo.tier.color};">DISCIPLINE — ${tierInfo.tier.label.toUpperCase()}</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;margin-bottom:10px;">
+        Today's behavior × ${tierInfo.tier.mult.toFixed(2)} on all stat decay. ${tierInfo.points}/4 credits earned today.
+      </div>
+      <div class="tier-credits">
+        ${credit('Workout logged', tierInfo.credits.showUp)}
+        ${credit('Protein hit', tierInfo.credits.protein)}
+        ${credit('Calories ±10%', tierInfo.credits.calories)}
+        ${credit(`Sugar ≤ ${player.goals.dailyAddedSugarMaxG ?? 36}g (${tierInfo.totals.sugar}g so far)`, tierInfo.credits.sugar)}
+      </div>
+    </div>
+
     <!-- Stats -->
     <div class="card">
       <div class="card-title" style="margin-bottom:4px;">STATS</div>
-      <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:14px;">Stats grow automatically — you never enter them manually. Each 10 points earned = +1 to the stat.</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:14px;">
+        Stats grow from logged work. Next level gets harder each time (curve: 8 + n acc).
+        Decay every 30 min, scaled by today's discipline tier.
+      </div>
       <div class="stat-grid">${statRows}</div>
       <div class="divider"></div>
       <div class="section-label">DERIVED STATS</div>

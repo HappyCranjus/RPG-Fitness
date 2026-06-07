@@ -32,6 +32,17 @@ function renderSettings(container) {
         </div>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">Max Added Sugar (per day)</label>
+        <div class="input-with-unit">
+          <input type="number" id="settings-sugar" value="${player.goals.dailyAddedSugarMaxG ?? 36}" min="0" max="500">
+          <span class="input-unit">g</span>
+        </div>
+        <div class="muted-text" style="font-size:0.72rem;margin-top:4px;line-height:1.4;">
+          Going over deals HP damage (${Engine.SUGAR_DMG_PER_GRAM} HP per gram over). Staying under earns a discipline credit.
+        </div>
+      </div>
+
       <div class="form-row">
         <div class="form-group" style="margin:0;">
           <label class="form-label">Carbs Goal (optional)</label>
@@ -49,7 +60,7 @@ function renderSettings(container) {
         </div>
       </div>
       <div class="muted-text" style="font-size:0.74rem;margin-top:-4px;margin-bottom:10px;">
-        Set both carbs &amp; fats to unlock the all-macros DIS bonus when you hit every goal in a day.
+        Carbs and fats are tracked for your reference — they don't affect the discipline tier directly.
       </div>
 
       <button class="btn btn-primary" onclick="saveSettings()">SAVE CHANGES</button>
@@ -100,12 +111,14 @@ function saveSettings() {
   const newProt  = parseInt(document.getElementById('settings-prot')?.value)  || player.goals.dailyProteinG;
   const newCarbs = parseInt(document.getElementById('settings-carbs')?.value) || 0;
   const newFats  = parseInt(document.getElementById('settings-fats')?.value)  || 0;
+  const newSugar = parseInt(document.getElementById('settings-sugar')?.value);
 
   if (newName) player.name = newName;
   player.goals.dailyCalories = newCal;
   player.goals.dailyProteinG = newProt;
   player.goals.dailyCarbsG   = newCarbs;
   player.goals.dailyFatsG    = newFats;
+  player.goals.dailyAddedSugarMaxG = isNaN(newSugar) ? (player.goals.dailyAddedSugarMaxG ?? 36) : newSugar;
 
   Store.setPlayer(player);
   Toast.show('Settings saved!', 'success');

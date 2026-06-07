@@ -532,6 +532,102 @@
 .preview-total-value.hp-preview-gain { color: var(--accent-green); }
 .preview-total-value.hp-preview-loss { color: var(--accent-red); }
 
+/* ── Preview stat-delta chips (log preview) ──── */
+
+.preview-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.preview-stat-label {
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.preview-stat-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stat-delta-chip {
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 99px;
+  font-family: var(--font-display);
+  font-size: 0.38rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ── Bar advance (post-log results modal) ──── */
+
+.bar-advance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.bar-advance-row:last-child {
+  border-bottom: none;
+}
+
+.bar-advance-label {
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  min-width: 90px;
+}
+
+.bar-advance-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bar-advance-track {
+  position: relative;
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.bar-advance-fill {
+  position: absolute;
+  top: 0; left: 0; height: 100%;
+  opacity: 0.5;
+}
+
+.bar-advance-overlay {
+  position: absolute;
+  top: 0; height: 100%;
+  animation: barFlash 1.4s ease;
+}
+
+@keyframes barFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+.bar-advance-text {
+  font-family: var(--font-display);
+  font-size: 0.36rem;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+
 /* ── Quest items ─────────────────────────────── */
 
 .quest-item {
@@ -1300,6 +1396,83 @@
   font-style: italic;
   line-height: 1.4;
 }
+
+/* ── Discipline tier banner (dashboard) + card (character) ── */
+
+.tier-banner {
+  border: 1px solid;
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(20, 21, 43, 0.6);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.tier-banner:active {
+  transform: scale(0.99);
+}
+
+.tier-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tier-banner-row + .tier-banner-row {
+  margin-top: 6px;
+}
+
+.tier-banner-label {
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+}
+
+.tier-banner-tier {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  flex: 1;
+}
+
+.tier-banner-mult {
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  opacity: 0.8;
+}
+
+.tier-banner-credits {
+  gap: 6px;
+}
+
+.tier-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  flex-shrink: 0;
+}
+
+.tier-dot.on  { background: currentColor; }
+.tier-dot.off { background: transparent; opacity: 0.35; }
+
+.tier-banner-credits-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.tier-credits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.credit-on  { color: var(--accent-green); }
+.credit-off { color: var(--text-muted); }
 
 /* ── Decay warning ────────────────────────────── */
 

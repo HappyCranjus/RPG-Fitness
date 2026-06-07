@@ -166,9 +166,10 @@ function renderLogEntries(log) {
 
     const detailMeals = (entry.meals || []).map(m => {
       const macros = [];
-      if (m.proteinG) macros.push(`${m.proteinG}p`);
-      if (m.carbsG)   macros.push(`${m.carbsG}c`);
-      if (m.fatsG)    macros.push(`${m.fatsG}f`);
+      if (m.proteinG)    macros.push(`${m.proteinG}p`);
+      if (m.carbsG)      macros.push(`${m.carbsG}c`);
+      if (m.fatsG)       macros.push(`${m.fatsG}f`);
+      if (m.addedSugarG) macros.push(`${m.addedSugarG}s🍬`);
       const macroStr = macros.length ? ` (${macros.join(' / ')})` : '';
       return `🍽️ ${escHtml(m.name || m.mealType)} — ${m.calories}kcal${macroStr}`;
     }).join('<br>');

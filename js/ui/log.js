@@ -1,6 +1,7 @@
 /* ─────────────────────────────────────────────
    Log Entry screen — Activities, Exercises, Meals
-   + live battle preview
+   with live battle preview, stat-delta preview,
+   and added-sugar tracking.
    ───────────────────────────────────────────── */
 
 const ACTIVITY_DEFS = [
@@ -42,13 +43,19 @@ let logState = {
 
 function renderLog(container) {
   logState = { activities: [], exercises: [], meals: [], routineId: null };
-  const monster = Store.getMonsters().active;
 
-  // Auto-apply routine from URL hash query (e.g. #log?routine=rt_c_5k)
   const preselectRoutine = (() => {
     const m = window.location.hash.match(/[?&]routine=([^&]+)/);
     return m ? decodeURIComponent(m[1]) : null;
   })();
+
+  // Today's sugar total before this entry (for the running counter UI).
+  const player = Store.getPlayer();
+  const sugarMax = player.goals.dailyAddedSugarMaxG ?? 36;
+  const today = Store.today();
+  const priorSugar = Store.getLog()
+    .filter(e => e.date === today)
+    .reduce((s, e) => s + (e.meals || []).reduce((ms, m) => ms + (m.addedSugarG || 0), 0), 0);
 
   container.innerHTML = `
     <div class="screen-title">LOG ENTRY</div>
@@ -84,6 +91,12 @@ function renderLog(container) {
     <!-- Meals -->
     <div class="section" id="log-meals-section">
       <div class="section-label">Meals</div>
+      <div id="sugar-running-row" style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:8px;">
+        <span style="color:var(--text-muted);">🍬 Sugar today:</span>
+        <span id="sugar-running-text" style="font-family:var(--font-display);font-size:0.5rem;color:var(--text-primary);">
+          ${priorSugar}/${sugarMax}g
+        </span>
+      </div>
       <div id="log-meals-list"></div>
       <div class="add-entry-row" id="add-meal-btn">
         <span>+</span> Add Meal
@@ -94,6 +107,7 @@ function renderLog(container) {
     <div class="battle-preview" id="battle-preview">
       <div class="battle-preview-title">📋 SESSION PREVIEW</div>
       <div id="preview-items"></div>
+      <div id="preview-stat-deltas" style="margin-top:6px;display:none;"></div>
       <div id="preview-attack-bonus"></div>
       <div class="preview-divider"></div>
       <div class="preview-totals">
@@ -116,7 +130,6 @@ function renderLog(container) {
     <div style="height:16px;"></div>
   `;
 
-  // Bind events
   document.getElementById('add-activity-btn').onclick = () => {
     logState.activities.push({ activityId: 'act_jog', name: 'Jogging / Running', durationMinutes: 30, type: 'cardio', estimatedCalories: 300 });
     renderActivityRow(logState.activities.length - 1);
@@ -130,7 +143,7 @@ function renderLog(container) {
   };
 
   document.getElementById('add-meal-btn').onclick = () => {
-    logState.meals.push({ name: '', calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, mealType: 'lunch' });
+    logState.meals.push({ name: '', calories: 0, proteinG: 0, carbsG: 0, fatsG: 0, addedSugarG: 0, mealType: 'lunch' });
     renderMealRow(logState.meals.length - 1);
     updatePreview();
   };
@@ -144,6 +157,8 @@ function renderLog(container) {
   if (preselectRoutine) {
     applyRoutine(preselectRoutine);
   }
+
+  updatePreview();
 }
 
 function buildRoutineOptions(selected) {
@@ -197,7 +212,6 @@ function applyRoutine(routineId) {
       });
     }
   }
-  // Rebuild both lists
   rerenderActivityList();
   const exListEl = document.getElementById('log-exercises-list');
   if (exListEl) exListEl.innerHTML = '';
@@ -253,7 +267,6 @@ function renderActivityRow(idx) {
     <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">Est. ${entry.estimatedCalories} cal</div>
   `;
 
-  // Bind change events
   document.getElementById('act-type-' + idx).onchange = e => {
     const def = ACTIVITY_DEFS.find(d => d.id === e.target.value) || ACTIVITY_DEFS[0];
     logState.activities[idx].activityId = def.id;
@@ -450,26 +463,39 @@ function renderMealRow(idx) {
         </div>
       </div>
     </div>
+    <div class="form-group" style="margin:8px 0 0;">
+      <label class="form-label">Added Sugar (2 HP per gram over the daily limit)</label>
+      <div class="input-with-unit">
+        <input type="number" id="meal-sugar-${idx}" value="${entry.addedSugarG||''}" placeholder="0" min="0">
+        <span class="input-unit">g</span>
+      </div>
+    </div>
     <div id="meal-quality-${idx}" class="meal-quality" style="display:none;"></div>
   `;
 
   const update = debounce(() => {
-    logState.meals[idx].name      = document.getElementById('meal-name-' + idx)?.value || '';
-    logState.meals[idx].mealType  = document.getElementById('meal-type-' + idx)?.value || 'lunch';
-    logState.meals[idx].calories  = parseInt(document.getElementById('meal-cal-' + idx)?.value) || 0;
-    logState.meals[idx].proteinG  = parseInt(document.getElementById('meal-prot-' + idx)?.value) || 0;
-    logState.meals[idx].carbsG    = parseInt(document.getElementById('meal-carbs-' + idx)?.value) || 0;
-    logState.meals[idx].fatsG     = parseInt(document.getElementById('meal-fats-' + idx)?.value) || 0;
+    logState.meals[idx].name        = document.getElementById('meal-name-' + idx)?.value || '';
+    logState.meals[idx].mealType    = document.getElementById('meal-type-' + idx)?.value || 'lunch';
+    logState.meals[idx].calories    = parseInt(document.getElementById('meal-cal-' + idx)?.value) || 0;
+    logState.meals[idx].proteinG    = parseInt(document.getElementById('meal-prot-' + idx)?.value) || 0;
+    logState.meals[idx].carbsG      = parseInt(document.getElementById('meal-carbs-' + idx)?.value) || 0;
+    logState.meals[idx].fatsG       = parseInt(document.getElementById('meal-fats-' + idx)?.value) || 0;
+    logState.meals[idx].addedSugarG = parseInt(document.getElementById('meal-sugar-' + idx)?.value) || 0;
 
-    // Live quality indicator — shows nutrition classification + the heal
-    // assuming you're still under today's calorie goal.
     const m = logState.meals[idx];
     const qualEl = document.getElementById('meal-quality-' + idx);
-    if (qualEl && (m.calories > 0 || m.proteinG > 0)) {
+    if (qualEl && (m.calories > 0 || m.proteinG > 0 || m.addedSugarG > 0)) {
       const cls = Engine.classifyMeal(m);
       const goal = (Store.getPlayer()?.goals?.dailyCalories) || 2000;
       const heal = Engine.computeMealHeal(m, 0, goal);
-      qualEl.textContent = `${cls.emoji} ${cls.label} — +${heal} HP`;
+      const sugarMax = Store.getPlayer()?.goals?.dailyAddedSugarMaxG ?? 36;
+      // Simple per-meal sugar damage display assumes you're at 0 sugar — for
+      // real numbers see the session preview below.
+      const overage = Math.max(0, (m.addedSugarG || 0) - sugarMax);
+      const sugarDmg = overage * Engine.SUGAR_DMG_PER_GRAM;
+      const net = heal - sugarDmg;
+      const sign = net >= 0 ? '+' : '';
+      qualEl.innerHTML = `${cls.emoji} ${cls.label} — ${sign}${net} HP${sugarDmg > 0 ? ` (sugar -${sugarDmg})` : ''}`;
       qualEl.style.display = 'inline-block';
     } else if (qualEl) {
       qualEl.style.display = 'none';
@@ -478,12 +504,13 @@ function renderMealRow(idx) {
     updatePreview();
   }, 300);
 
-  document.getElementById('meal-name-' + idx).oninput  = update;
-  document.getElementById('meal-type-' + idx).onchange = update;
-  document.getElementById('meal-cal-'  + idx).oninput  = update;
-  document.getElementById('meal-prot-' + idx).oninput  = update;
-  document.getElementById('meal-carbs-' + idx).oninput = update;
-  document.getElementById('meal-fats-'  + idx).oninput = update;
+  document.getElementById('meal-name-' + idx).oninput   = update;
+  document.getElementById('meal-type-' + idx).onchange  = update;
+  document.getElementById('meal-cal-'  + idx).oninput   = update;
+  document.getElementById('meal-prot-' + idx).oninput   = update;
+  document.getElementById('meal-carbs-' + idx).oninput  = update;
+  document.getElementById('meal-fats-'  + idx).oninput  = update;
+  document.getElementById('meal-sugar-' + idx).oninput  = update;
 }
 
 function deleteMeal(idx) {
@@ -496,86 +523,97 @@ function deleteMeal(idx) {
 
 /* ── Session preview ─────────────────────────── */
 
-const ACTIVITY_XP_MOD  = { cardio: 1.0, sports: 1.1, misc: 0.9 };
-const EXERCISE_XP_RATE = {
-  ex_pushup: 0.4, ex_situp: 0.3, ex_pullup: 0.8,
-  ex_squat: 0.4, ex_idl: 0.5, ex_dumbbell: 0.5,
-  ex_lunge: 0.4, ex_dip: 0.7, ex_burpee: 1.2, ex_plank: 0.1,
-  ex_bench: 0.7, ex_row: 0.6,
-};
-
 function updatePreview() {
   const player  = Store.getPlayer();
   const monster = Store.getMonsters().active;
 
   const itemsEl       = document.getElementById('preview-items');
+  const statsEl       = document.getElementById('preview-stat-deltas');
   const bonusEl       = document.getElementById('preview-attack-bonus');
   const totalXpEl     = document.getElementById('preview-total-xp');
   const totalCalEl    = document.getElementById('preview-total-cal');
   const totalHpEl     = document.getElementById('preview-total-hp');
+  const sugarTextEl   = document.getElementById('sugar-running-text');
 
   if (!itemsEl) return;
 
-  // XP rows per activity
-  let totalXP = 0, totalCal = 0;
-  const xpRows = [];
+  const preview = Engine.previewDamage(
+    logState.activities, logState.exercises, logState.meals,
+    monster, player
+  );
+
+  const rows = [];
 
   for (const a of logState.activities) {
-    const mod = ACTIVITY_XP_MOD[a.type] || 0.9;
-    const xp  = Math.floor(a.durationMinutes * 1.5 * mod);
-    totalXP  += xp;
-    totalCal += a.estimatedCalories || 0;
-    xpRows.push(`
+    rows.push(`
       <div class="preview-item">
         <span class="preview-item-name">${escHtml(a.name)} ${a.durationMinutes}min</span>
-        <span class="preview-item-dmg neutral">+${xp} XP</span>
+        <span class="preview-item-dmg neutral">+${Math.floor(a.durationMinutes * 1.5 * (a.type === 'sports' ? 1.1 : a.type === 'cardio' ? 1 : 0.9))} XP</span>
       </div>
     `);
   }
 
   for (const ex of logState.exercises) {
-    const perRep = EXERCISE_XP_RATE[ex.exerciseId] || 0.4;
-    const xp     = Math.floor(ex.totalReps * perRep);
-    totalXP     += xp;
-    xpRows.push(`
+    const xp = preview.totalXP; // not per-row; we'll fall back to summing
+    rows.push(`
       <div class="preview-item">
         <span class="preview-item-name">${escHtml(ex.name)} ${ex.totalReps}r</span>
-        <span class="preview-item-dmg neutral">+${xp} XP</span>
+        <span class="preview-item-dmg neutral">workout</span>
       </div>
     `);
   }
 
-  // HP rows from meals — preview uses running calorie total starting from
-  // today's already-logged meals, so per-meal heal cuts off when the user
-  // crosses their goal.
-  const dailyCalGoal = player.goals.dailyCalories;
-  const todayEntries = Store.getLog().filter(e => e.date === Store.today());
-  let runningCal = todayEntries.reduce((sum, e) =>
-    sum + e.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
+  // Meal HP rows w/ sugar damage taken into account
+  const sugarMax = player.goals.dailyAddedSugarMaxG ?? 36;
+  const today    = Store.today();
+  const priorEntries = Store.getLog().filter(e => e.date === today);
+  let runningCal   = priorEntries.reduce((sum, e) => sum + e.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
+  let runningSugar = priorEntries.reduce((sum, e) => sum + e.meals.reduce((s, m) => s + (m.addedSugarG || 0), 0), 0);
   let totalHpDelta = 0;
-  const hpRows = [];
   for (const m of logState.meals) {
-    if (m.calories === 0 && m.proteinG === 0) continue;
-    const cls  = Engine.classifyMeal(m);
-    const heal = Engine.computeMealHeal(m, runningCal, dailyCalGoal);
-    totalHpDelta += heal;
-    runningCal   += m.calories || 0;
-    const mealXP  = 15 + Math.floor((m.proteinG || 0) * 0.2);
-    totalXP      += mealXP;
-    const hpCls = heal > 0 ? 'hp-gain' : 'hp-neutral';
-    hpRows.push(`
+    if (m.calories === 0 && m.proteinG === 0 && (m.addedSugarG || 0) === 0) continue;
+    const cls       = Engine.classifyMeal(m);
+    const heal      = Engine.computeMealHeal(m, runningCal, player.goals.dailyCalories);
+    const overage   = Engine.sugarOverageForMeal(m, runningSugar, sugarMax);
+    const sugarDmg  = overage * Engine.SUGAR_DMG_PER_GRAM;
+    const net       = heal - sugarDmg;
+    totalHpDelta   += net;
+    runningCal     += m.calories || 0;
+    runningSugar   += m.addedSugarG || 0;
+    const sign = net >= 0 ? '+' : '';
+    const cls2 = net > 0 ? 'hp-gain' : (net < 0 ? 'hp-loss' : 'hp-neutral');
+    rows.push(`
       <div class="preview-item">
-        <span class="preview-item-name">${escHtml(m.name || 'Meal')} ${cls.emoji}</span>
-        <span class="preview-item-hp ${hpCls}">+${heal} HP</span>
+        <span class="preview-item-name">${escHtml(m.name || 'Meal')} ${cls.emoji}${sugarDmg > 0 ? ` 🍬-${sugarDmg}` : ''}</span>
+        <span class="preview-item-hp ${cls2}">${sign}${net} HP</span>
       </div>
     `);
   }
 
-  const allRows = [...xpRows, ...hpRows];
-  if (allRows.length > 0) {
-    itemsEl.innerHTML = allRows.join('');
-  } else {
-    itemsEl.innerHTML = `<div class="muted-text" style="font-size:0.78rem;padding:4px 0;">Add items above to see preview</div>`;
+  itemsEl.innerHTML = rows.length > 0
+    ? rows.join('')
+    : `<div class="muted-text" style="font-size:0.78rem;padding:4px 0;">Add items above to see preview</div>`;
+
+  // Stat-delta preview
+  const sp = preview.statPreview || { STR:0, AGI:0, VIT:0 };
+  const anyStat = sp.STR + sp.AGI + sp.VIT > 0;
+  if (statsEl) {
+    if (anyStat) {
+      const fmt = (v) => v > 0 ? `+${v.toFixed(2)}` : '0';
+      statsEl.style.display = '';
+      statsEl.innerHTML = `
+        <div class="preview-stat-row">
+          <span class="preview-stat-label">Stat bars</span>
+          <span class="preview-stat-chips">
+            <span class="stat-delta-chip stat-bar-str-text">STR ${fmt(sp.STR)}</span>
+            <span class="stat-delta-chip stat-bar-agi-text">AGI ${fmt(sp.AGI)}</span>
+            <span class="stat-delta-chip stat-bar-vit-text">VIT ${fmt(sp.VIT)}</span>
+          </span>
+        </div>
+      `;
+    } else {
+      statsEl.style.display = 'none';
+    }
   }
 
   // Attack bonus hint from logged types vs monster weakness
@@ -588,7 +626,8 @@ function updatePreview() {
     const resistances = monster.resistances || [];
     let hint = '';
     if ([...loggedTypes].some(t => weaknesses.includes(t))) {
-      hint = `<div class="attack-bonus-indicator weakness" style="margin-top:6px;margin-bottom:0;font-size:0.72rem;">🗡️ Weakness logged — +50% attack bonus vs ${escHtml(monster.name)}!</div>`;
+      const mult = Engine.weaknessMultiplier(player.stats.STR);
+      hint = `<div class="attack-bonus-indicator weakness" style="margin-top:6px;margin-bottom:0;font-size:0.72rem;">🗡️ Weakness logged — ×${mult.toFixed(2)} attack vs ${escHtml(monster.name)}!</div>`;
     } else if ([...loggedTypes].every(t => resistances.includes(t))) {
       hint = `<div class="attack-bonus-indicator resistance" style="margin-top:6px;margin-bottom:0;font-size:0.72rem;">⚠️ Resistant type only — 50% damage vs ${escHtml(monster.name)}</div>`;
     }
@@ -597,12 +636,20 @@ function updatePreview() {
     bonusEl.innerHTML = '';
   }
 
-  if (totalXpEl)  totalXpEl.textContent  = `+${totalXP}`;
-  if (totalCalEl) totalCalEl.textContent = `~${totalCal}`;
+  if (totalXpEl)  totalXpEl.textContent  = `+${preview.totalXP}`;
+  if (totalCalEl) totalCalEl.textContent = `~${preview.totalCal}`;
   if (totalHpEl) {
     const sign = totalHpDelta >= 0 ? '+' : '';
     totalHpEl.textContent = `${sign}${totalHpDelta} HP`;
     totalHpEl.className   = 'preview-total-value ' + (totalHpDelta >= 0 ? 'hp-preview-gain' : 'hp-preview-loss');
+  }
+
+  // Sugar running total
+  if (sugarTextEl) {
+    const projected = runningSugar;
+    const overChip = projected > sugarMax ? ` ⚠ over` : '';
+    sugarTextEl.textContent = `${projected}/${sugarMax}g${overChip}`;
+    sugarTextEl.style.color = projected > sugarMax ? 'var(--accent-red)' : 'var(--text-primary)';
   }
 }
 
@@ -615,6 +662,14 @@ function saveLog() {
     return;
   }
 
+  const playerBefore = Store.getPlayer();
+  const accBefore = {
+    STR: playerBefore.statPoints.STR_acc || 0,
+    AGI: playerBefore.statPoints.AGI_acc || 0,
+    VIT: playerBefore.statPoints.VIT_acc || 0,
+  };
+  const statsBefore = { ...playerBefore.stats };
+
   const logEntry = {
     id:         'log_' + Date.now(),
     date:       Store.today(),
@@ -626,6 +681,8 @@ function saveLog() {
   };
 
   const results = Engine.processLogEntry(logEntry);
+  results._accBefore   = accBefore;
+  results._statsBefore = statsBefore;
   showResultModal(results);
 }
 
@@ -635,32 +692,70 @@ let _lastResults = null;
 
 function showResultModal(results) {
   _lastResults = results;
+  const player = Store.getPlayer();
+
   const statGainChips = Object.entries(results.statsGained).map(([s, v]) =>
     `<span class="stat-gain-chip">${s} +${v}</span>`
   ).join('');
+
+  // Bar-advance rows: show acc-before vs acc-after for each stat that moved.
+  const barRows = ['STR', 'AGI', 'VIT'].map(s => {
+    const delta = (results.statDeltas && results.statDeltas[s]) || 0;
+    if (delta <= 0.005) return '';
+    const accBefore = (results._accBefore && results._accBefore[s]) || 0;
+    const accAfter  = (player.statPoints[s + '_acc']) || 0;
+    const beforeCurve = Engine.statCurve.statFromAcc(accBefore);
+    const afterCurve  = Engine.statCurve.statFromAcc(accAfter);
+    const beforePct = Engine.statCurve.progressPct(accBefore);
+    const afterPct  = Engine.statCurve.progressPct(accAfter);
+    return `
+      <div class="bar-advance-row">
+        <div class="bar-advance-label">${s} +${delta.toFixed(2)} acc</div>
+        <div class="bar-advance-bar">
+          <div class="bar-advance-track">
+            <div class="bar-advance-fill stat-bar-${s.toLowerCase()}" style="width:${beforePct}%"></div>
+            <div class="bar-advance-overlay stat-bar-${s.toLowerCase()}" style="left:${beforePct}%;width:${Math.max(0, afterPct - beforePct)}%"></div>
+          </div>
+          <div class="bar-advance-text">
+            ${beforeCurve.accIntoLevel.toFixed(1)}/${beforeCurve.nextCost} → ${afterCurve.accIntoLevel.toFixed(1)}/${afterCurve.nextCost}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 
   const questRows = results.questUpdates.filter(u => u.wasCompleted).map(u =>
     `<div style="color:var(--accent-green);font-size:0.82rem;">✅ ${escHtml(u.quest.title)} — COMPLETE!</div>`
   ).join('');
 
-  // HP change rows — per-meal heal lines (all positive in the new model)
-  const hpRows = (results.mealQualities || []).map(q =>
-    `<div class="result-row">
-      <span class="result-label">🍽 ${escHtml(q.name || 'Meal')} ${q.emoji}</span>
-      <span class="result-value ${q.hp > 0 ? 'green' : ''}">+${q.hp} HP</span>
-    </div>`
-  ).join('');
+  // HP change rows — per-meal lines (net could be negative)
+  const hpRows = (results.mealQualities || []).map(q => {
+    const sign = q.hp >= 0 ? '+' : '';
+    const cls  = q.hp > 0 ? 'green' : (q.hp < 0 ? 'red' : '');
+    const sugarTag = q.sugarDmg > 0 ? ` <span style="color:var(--accent-red);font-size:0.75rem;">🍬-${q.sugarDmg}</span>` : '';
+    return `<div class="result-row">
+      <span class="result-label">🍽 ${escHtml(q.name || 'Meal')} ${q.emoji}${sugarTag}</span>
+      <span class="result-value ${cls}">${sign}${q.hp} HP</span>
+    </div>`;
+  }).join('');
 
   const bd = results.hpBreakdown || {};
   const cal800Line = bd.cal800Bonus > 0
-    ? `<div class="result-row"><span class="result-label">🎯 Calorie milestone (800)</span><span class="result-value green">+${bd.cal800Bonus} HP</span></div>`
-    : '';
+    ? `<div class="result-row"><span class="result-label">🎯 Calorie milestone (800)</span><span class="result-value green">+${bd.cal800Bonus} HP</span></div>` : '';
   const cal1600Line = bd.cal1600Bonus > 0
-    ? `<div class="result-row"><span class="result-label">🎯 Calorie milestone (1600)</span><span class="result-value green">+${bd.cal1600Bonus} HP</span></div>`
-    : '';
+    ? `<div class="result-row"><span class="result-label">🎯 Calorie milestone (1600)</span><span class="result-value green">+${bd.cal1600Bonus} HP</span></div>` : '';
   const proteinLine = bd.proteinBonus > 0
-    ? `<div class="result-row"><span class="result-label">🥩 Protein goal hit!</span><span class="result-value green">+${bd.proteinBonus} HP</span></div>`
-    : '';
+    ? `<div class="result-row"><span class="result-label">🥩 Protein goal hit!</span><span class="result-value green">+${bd.proteinBonus} HP</span></div>` : '';
+  const sugarLine = bd.sugarDmg > 0
+    ? `<div class="result-row"><span class="result-label">🍬 Total sugar damage</span><span class="result-value red">-${bd.sugarDmg} HP</span></div>` : '';
+
+  const tier = results.tier;
+  const tierRow = tier ? `
+    <div class="result-row">
+      <span class="result-label">📊 Discipline tier</span>
+      <span class="result-value" style="color:${tier.tier.color}">${tier.tier.label} (${tier.points}/4) × ${tier.tier.mult.toFixed(2)}</span>
+    </div>
+  ` : '';
 
   const html = `
     <div class="result-title">📋 TRAINING LOG</div>
@@ -690,19 +785,27 @@ function showResultModal(results) {
       <span class="result-value gold">+25% STAT</span>
     </div>` : ''}
 
-    ${(hpRows || cal800Line || cal1600Line || proteinLine) ? `
+    ${tierRow}
+
+    ${(hpRows || cal800Line || cal1600Line || proteinLine || sugarLine) ? `
     <div class="divider"></div>
     <div class="section-label">HEALTH</div>
-    ${hpRows}${cal800Line}${cal1600Line}${proteinLine}
+    ${hpRows}${cal800Line}${cal1600Line}${proteinLine}${sugarLine}
     <div class="result-row">
       <span class="result-label">HP Now</span>
       <span class="result-value ${results.knockedOut ? 'red' : 'green'}">${results.hpAfter} / ${results.hpMax}</span>
     </div>
     ` : ''}
 
+    ${barRows ? `
+    <div class="divider"></div>
+    <div class="section-label">BAR ADVANCE</div>
+    ${barRows}
+    ` : ''}
+
     ${Object.keys(results.statsGained).length > 0 ? `
     <div class="divider"></div>
-    <div class="section-label">STAT GAINS</div>
+    <div class="section-label">STAT LEVEL-UPS</div>
     <div class="result-stat-gains">${statGainChips}</div>
     ` : ''}
 
@@ -720,24 +823,20 @@ function showResultModal(results) {
   document.getElementById('result-continue-btn').onclick = () => {
     Modal.hide();
 
-    // Show achievement toasts
     for (const ach of results.newAchievements) {
       Toast.show(`${ach.icon} Achievement unlocked: ${ach.title}`, 'achievement');
     }
 
-    // Level up modals
     if (results.newLevels.length > 0) {
       showLevelUpModal(results.newLevels[results.newLevels.length - 1]);
       return;
     }
 
-    // Knock-out modal (before defeat/dashboard)
     if (results.knockedOut) {
       showKnockOutModal(results);
       return;
     }
 
-    // Defeat modal
     if (results.defeatedMonster) {
       showDefeatModal(results.defeatedMonster);
       return;
@@ -811,7 +910,7 @@ function showDefeatModal(defeatData) {
 
 function showKnockOutModal(results) {
   const player = Store.getPlayer();
-  const { STR, AGI, VIT, DIS } = player.stats;
+  const { STR, AGI, VIT } = player.stats;
   const html = `
     <div class="knocked-out-modal">
       <div class="knocked-out-title">💀 KNOCKED OUT 💀</div>
@@ -828,7 +927,7 @@ function showKnockOutModal(results) {
       <div class="card" style="margin-bottom:16px;">
         <div class="section-label">STATS HALVED</div>
         <div style="font-family:var(--font-display);font-size:0.55rem;color:var(--text-muted);margin-top:6px;line-height:2;">
-          STR:${STR}  AGI:${AGI}  VIT:${VIT}  DIS:${DIS}
+          STR:${STR}  AGI:${AGI}  VIT:${VIT}
         </div>
       </div>
       <button class="btn btn-primary" id="ko-continue-btn">CONTINUE</button>

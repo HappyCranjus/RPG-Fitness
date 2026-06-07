@@ -1,6 +1,7 @@
 /* ─────────────────────────────────────────────
    App entry point — event bus, modal, toast,
-   service worker registration, first-run
+   service worker registration, first-run,
+   persistent stat header + countdown ticker.
    ───────────────────────────────────────────── */
 
 /* ── Event bus ───────────────────────────────── */
@@ -69,8 +70,6 @@ function showOnboarding() {
   const container = document.getElementById('screen-container');
   container.style.paddingBottom = '24px';
 
-  let step = 1;
-
   function renderStep1() {
     container.innerHTML = `
       <div class="onboarding">
@@ -99,7 +98,6 @@ function showOnboarding() {
       renderStep2(name);
     };
 
-    // Allow pressing Enter
     document.getElementById('onboard-name').onkeydown = e => {
       if (e.key === 'Enter') document.getElementById('onboard-next-1').click();
     };
@@ -113,9 +111,9 @@ function showOnboarding() {
         <div class="onboarding-logo">🎯</div>
         <div class="onboarding-title" style="font-size:0.7rem;">SET YOUR GOALS</div>
         <div class="onboarding-subtitle">
-          These targets help track your discipline stat and unlock quests.
-          Carbs and fats are optional — leave them 0 to skip the full-macro DIS bonus.
-          You can change them any time in settings.
+          These targets shape your daily Discipline tier — the multiplier on
+          how fast your stats decay. Hit your goals and stats hold; ghost the
+          day and they slip away faster.
         </div>
         <div class="onboarding-form">
           <div class="form-group">
@@ -130,6 +128,17 @@ function showOnboarding() {
             <div class="input-with-unit">
               <input type="number" id="onboard-prot" value="150" min="10" max="999" inputmode="numeric">
               <span class="input-unit">g</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Added Sugar (per day)</label>
+            <div class="input-with-unit">
+              <input type="number" id="onboard-sugar" value="36" min="0" max="500" inputmode="numeric">
+              <span class="input-unit">g</span>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px;line-height:1.4;">
+              Going over the limit deals HP damage (2 HP per gram over).
+              Staying under = +1 discipline credit.
             </div>
           </div>
           <div class="form-row">
@@ -156,25 +165,22 @@ function showOnboarding() {
     document.getElementById('onboard-next-2').onclick = () => {
       const cal   = parseInt(document.getElementById('onboard-cal').value)   || 2000;
       const prot  = parseInt(document.getElementById('onboard-prot').value)  || 150;
+      const sugar = parseInt(document.getElementById('onboard-sugar').value);
       const carbs = parseInt(document.getElementById('onboard-carbs').value) || 0;
       const fats  = parseInt(document.getElementById('onboard-fats').value)  || 0;
-      finishOnboarding(name, cal, prot, carbs, fats);
+      finishOnboarding(name, cal, prot, carbs, fats, isNaN(sugar) ? 36 : sugar);
     };
   }
 
-  function finishOnboarding(name, cal, prot, carbs, fats) {
-    const player = Store.makePlayer(name, cal, prot, carbs, fats);
+  function finishOnboarding(name, cal, prot, carbs, fats, sugarMax) {
+    const player = Store.makePlayer(name, cal, prot, carbs, fats, sugarMax);
     Store.setPlayer(player);
 
-    // Init quests
     const today     = Store.today();
     const weekStart = Store.weekStart();
     Quests.refresh(today, weekStart);
-
-    // Spawn first monster
     Monsters.spawnNext(player);
 
-    // Show monster intro
     const monster = Store.getMonsters().active;
     container.innerHTML = `
       <div class="onboarding">
@@ -197,6 +203,7 @@ function showOnboarding() {
       const statHdr = document.getElementById('stat-header');
       statHdr.classList.remove('hidden');
       updateStatHeader();
+      startHeaderCountdownTicker();
       Router.init();
     };
   }
@@ -210,11 +217,10 @@ function updateStatHeader() {
   const hdr    = document.getElementById('stat-header');
   if (!player || !hdr || hdr.classList.contains('hidden')) return;
 
-  // Apply energy regen before displaying
   Engine.updateEnergyRegen(player);
   Store.setPlayer(player);
 
-  const { STR, AGI, VIT, DIS } = player.stats;
+  const { STR, AGI, VIT } = player.stats;
   const hp    = player.hp    ?? player.hpMax ?? 100;
   const hpMax = player.hpMax ?? (100 + VIT * 15);
   const hpPct = Math.max(0, Math.min(100, (hp / hpMax) * 100));
@@ -230,7 +236,7 @@ function updateStatHeader() {
   } else {
     nameLevelEl.textContent = `${player.name}  Lv${player.level}`;
   }
-  document.getElementById('hdr-stats').textContent      = `STR:${STR}  AGI:${AGI}  VIT:${VIT}  DIS:${DIS}`;
+  document.getElementById('hdr-stats').textContent      = `STR:${STR} AGI:${AGI} VIT:${VIT}`;
   document.getElementById('hdr-hp-fill').style.width    = hpPct + '%';
   document.getElementById('hdr-hp-text').textContent    = `${hp}/${hpMax}`;
   document.getElementById('hdr-energy-fill').style.width   = energyPct + '%';
@@ -251,7 +257,56 @@ function updateStatHeader() {
     hdr.classList.remove('knocked-out');
   }
 
+  // Discipline tier chip
+  const today    = Store.today();
+  const todayLog = Store.getLog().filter(e => e.date === today);
+  const tierInfo = Engine.disciplineTier(player, todayLog);
+  const tierEl   = document.getElementById('hdr-tier');
+  if (tierEl) {
+    tierEl.textContent       = tierInfo.tier.short;
+    tierEl.style.color       = tierInfo.tier.color;
+    tierEl.style.borderColor = tierInfo.tier.color;
+    tierEl.title             = `Discipline: ${tierInfo.tier.label} (${tierInfo.points}/4) — decay × ${tierInfo.tier.mult.toFixed(1)}`;
+  }
+
+  updateHeaderCountdowns(player);
   updateFedChip();
+}
+
+function updateHeaderCountdowns(player) {
+  const statNextEl = document.getElementById('hdr-stat-next');
+  const hpNextEl   = document.getElementById('hdr-hp-next');
+  const now = Date.now();
+  if (statNextEl) {
+    const ms = Engine.msUntilNextStatTick(player, now);
+    statNextEl.textContent = `⏳ stat ${formatMs(ms)}`;
+  }
+  if (hpNextEl) {
+    const ms = Engine.msUntilNextHpTick(player, now);
+    hpNextEl.textContent = `🩸 ${formatMs(ms)}`;
+  }
+}
+
+function formatMs(ms) {
+  if (!isFinite(ms) || ms <= 0) return '—';
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h}h${String(m % 60).padStart(2,'0')}m`;
+  }
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+let _headerCountdownTimer = null;
+function startHeaderCountdownTicker() {
+  if (_headerCountdownTimer) clearInterval(_headerCountdownTimer);
+  _headerCountdownTimer = setInterval(() => {
+    const player = Store.getPlayer();
+    if (!player) return;
+    updateHeaderCountdowns(player);
+  }, 30 * 1000);
 }
 
 function updateFedChip() {
@@ -303,20 +358,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const statHdr = document.getElementById('stat-header');
     statHdr.classList.remove('hidden');
 
-    // Apply cycle rollover and stat decay before anything renders
     const today     = Store.today();
     const weekStart = Store.weekStart();
     const player    = Store.getPlayer();
     const rollResult  = Engine.rolloverCycleIfNeeded(player, today);
     const decayResult = Engine.applyStatDecay(player, today);
 
-    // Apply passive HP decay + monster 6h attack ticks
     const activeMonster = Store.getMonsters().active;
     const survival = Engine.applySurvivalTicks(player, activeMonster, Date.now());
     Store.setPlayer(player);
     Store.recordStatSnapshot(player, today);
 
-    // Roll a new 6-hour activity bonus if the prior one expired
     const priorBonus = Store.getBonus();
     const activeBonus = Engine.getActiveBonus(Date.now());
     const bonusJustRolled = priorBonus && activeBonus.itemId !== priorBonus.itemId
@@ -327,23 +379,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (Object.keys(decayResult.decayed).length > 0) {
       const lost = Object.entries(decayResult.decayed).map(([s, v]) => `${s}-${v}`).join(' ');
-      Toast.show('💀 Stat decay from inactivity: ' + lost, 'info');
+      Toast.show(`💀 Stat decay (${decayResult.tier.label}): ` + lost, 'info');
     }
-    if (survival.attack.ticksApplied > 0 && activeMonster && !survival.knockedOut) {
+    if (survival.attack && survival.attack.landed > 0 && activeMonster && !survival.knockedOut) {
       const name = activeMonster.name || 'Monster';
-      Toast.show(`💢 ${name} struck ${survival.attack.ticksApplied}× (-${survival.attack.damage} HP)`, 'info');
+      Toast.show(`💢 ${name} struck ${survival.attack.landed}× (-${survival.attack.damage} HP)`, 'info');
+    }
+    if (survival.attack && survival.attack.dodged > 0) {
+      Toast.show(`🌀 Dodged ${survival.attack.dodged}× (AGI shielded you)`, 'success');
     }
     if (survival.decay.damage > 0 && !survival.knockedOut) {
-      Toast.show(`⏳ Hunger drain: -${survival.decay.damage} HP. Eat something!`, 'info');
+      Toast.show(`⏳ Passive HP drain: -${survival.decay.damage} HP. Eat something!`, 'info');
     }
     if (survival.knockedOut) {
-      Toast.show('💀 You collapsed from hunger! Eat to recover.', 'info');
+      Toast.show('💀 You collapsed! Eat to recover.', 'info');
     }
     if (bonusJustRolled) {
       Toast.show(`⭐ New bonus: ${activeBonus.icon} ${activeBonus.label} — +25% for 6h`, 'success');
     }
 
     updateStatHeader();
+    startHeaderCountdownTicker();
 
     Quests.refresh(today, weekStart);
 

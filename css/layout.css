@@ -114,7 +114,42 @@
 }
 
 #stat-header:not(.hidden) ~ #screen-container {
-  padding-top: 92px;
+  padding-top: 104px;
+}
+
+/* Tier chip in stat header */
+.hdr-tier {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  border: 1px solid;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+
+/* Compact countdown chips in stat header */
+.hdr-countdown {
+  font-family: var(--font-display);
+  font-size: 0.36rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+#hdr-hp-next {
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+#stat-header-fed-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
 }
 
 /* Bottom navigation */

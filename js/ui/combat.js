@@ -86,11 +86,12 @@ function renderActiveMonster(monster, player, todayLogs) {
       : `~${hoursNeeded.toFixed(1)}h`;
   }
 
-  const attackDmg = Math.floor(player.stats.STR * 5 + player.level * 2);
+  const attackDmg = Math.floor(player.stats.STR * 5);
   const weaknesses = monster.weaknesses || [];
   const loggedTypes = getTodayLoggedTypes(todayLogs);
   const matchesWeakness = [...loggedTypes].some(t => weaknesses.includes(t));
-  const expectedDmg = matchesWeakness ? Math.floor(attackDmg * 1.5) : attackDmg;
+  const weaknessMult = Engine.weaknessMultiplier(player.stats.STR);
+  const expectedDmg = matchesWeakness ? Math.floor(attackDmg * weaknessMult) : attackDmg;
 
   return `
     <div class="monster-card" style="cursor:default;">
@@ -157,10 +158,13 @@ function getAttackBonusInfo(player, monster, todayLogs) {
   const weaknesses  = monster.weaknesses  || [];
   const resistances = monster.resistances || [];
 
+  const baseDmg = Math.floor(player.stats.STR * 5);
+  const mult    = Engine.weaknessMultiplier(player.stats.STR);
+  const pct     = Math.round((mult - 1) * 100);
+
   if (loggedTypes.size === 0) {
-    const baseDmg = Math.floor(player.stats.STR * 5 + player.level * 2);
     return {
-      bonusText:  `🗡️ No training logged today — base ${baseDmg} dmg. Log a workout for weakness bonus!`,
+      bonusText:  `🗡️ No training logged today — base ${baseDmg} dmg. Log a workout for the weakness bonus!`,
       bonusClass: 'neutral',
     };
   }
@@ -168,23 +172,21 @@ function getAttackBonusInfo(player, monster, todayLogs) {
   const typesArr = [...loggedTypes];
   if (typesArr.some(t => weaknesses.includes(t))) {
     const matching = typesArr.filter(t => weaknesses.includes(t)).map(capitalizeType).join(', ');
-    const baseDmg  = Math.floor(player.stats.STR * 5 + player.level * 2);
     return {
-      bonusText:  `💪 ${matching} logged today → +50% damage bonus!`,
+      bonusText:  `💪 ${matching} logged → ×${mult.toFixed(2)} (+${pct}%) damage!`,
       bonusClass: 'weakness',
     };
   }
 
   if (typesArr.every(t => resistances.includes(t))) {
     return {
-      bonusText:  `⚠️ Only resistant types logged today → 50% damage`,
+      bonusText:  `⚠️ Only resistant types logged → 50% damage`,
       bonusClass: 'resistance',
     };
   }
 
-  const baseDmg = Math.floor(player.stats.STR * 5 + player.level * 2);
   return {
-    bonusText:  `🗡️ ${typesArr.map(capitalizeType).join(', ')} logged — neutral damage (${baseDmg} dmg). Try logging ${weaknesses.map(capitalizeType).join(' or ')} for +50%!`,
+    bonusText:  `🗡️ ${typesArr.map(capitalizeType).join(', ')} logged — neutral damage (${baseDmg} dmg). Try logging ${weaknesses.map(capitalizeType).join(' or ')} for ×${mult.toFixed(2)}!`,
     bonusClass: 'neutral',
   };
 }

@@ -28,7 +28,7 @@ const Monsters = (() => {
       resistances: ['cardio'],
       flavorText: 'Emerges from a pile of delivery bags at 11pm.',
       defeatMessage: 'The Takeout Troll drops a crumpled menu and flees!',
-      reward: { xp: 140, gold: 30, statBoosts: { DIS: 1 } },
+      reward: { xp: 140, gold: 30, statBoosts: { VIT: 1 } },
     },
     {
       id: 'm_iron_goblin',
@@ -53,7 +53,7 @@ const Monsters = (() => {
       resistances: [],
       flavorText: 'Embodies every skipped workout. Strong against single efforts.',
       defeatMessage: 'The Skip Day Shade dissipates with a hollow scream!',
-      reward: { xp: 250, gold: 55, statBoosts: { DIS: 1, VIT: 1 } },
+      reward: { xp: 250, gold: 55, statBoosts: { STR: 1, VIT: 1 } },
     },
     {
       id: 'm_sugar_fiend',
@@ -65,7 +65,7 @@ const Monsters = (() => {
       resistances: ['bodyweight'],
       flavorText: 'Grows stronger every time you skip tracking macros.',
       defeatMessage: 'The Sugar Fiend shatters into caramel shards!',
-      reward: { xp: 280, gold: 60, statBoosts: { DIS: 2 } },
+      reward: { xp: 280, gold: 60, statBoosts: { VIT: 1, AGI: 1 } },
     },
     {
       id: 'm_shadow_stalker',
@@ -101,8 +101,8 @@ const Monsters = (() => {
       weaknesses: ['cardio', 'diet', 'bodyweight'],
       resistances: ['sports'],
       flavorText: 'Ancient and patient. Feeds on inconsistency.',
-      defeatMessage: 'The Void Serpent coils into nothingness. Your discipline holds.',
-      reward: { xp: 700, gold: 130, statBoosts: { VIT: 2, DIS: 1 } },
+      defeatMessage: 'The Void Serpent coils into nothingness. Your endurance holds.',
+      reward: { xp: 700, gold: 130, statBoosts: { VIT: 2, STR: 1 } },
     },
     // ── Tier 4 (level 25+) ───────────────────
     {
@@ -115,7 +115,7 @@ const Monsters = (() => {
       resistances: [],
       flavorText: 'Only falls to warriors who move AND eat well in the same session.',
       defeatMessage: 'The Undying collapses. You have conquered the hardest foe of all: yourself.',
-      reward: { xp: 1200, gold: 250, statBoosts: { STR: 2, AGI: 2, VIT: 2, DIS: 2 } },
+      reward: { xp: 1200, gold: 250, statBoosts: { STR: 3, AGI: 3, VIT: 3 } },
     },
   ];
 
@@ -166,21 +166,22 @@ const Monsters = (() => {
 
     if (monster.reward.statBoosts) {
       for (const [stat, amount] of Object.entries(monster.reward.statBoosts)) {
-        player.stats[stat] = (player.stats[stat] || 1) + amount;
-        player.statPoints[stat + '_acc'] = (player.statPoints[stat + '_acc'] || 0) + amount * 10;
+        if (!(stat in player.stats)) continue;  // skip retired stats (DIS)
+        // Advance _acc by costFor(currentStat) × amount so the curve stays consistent.
+        for (let i = 0; i < amount; i++) {
+          const cost = Engine.statCurve.costFor(player.stats[stat]);
+          player.statPoints[stat + '_acc'] = (player.statPoints[stat + '_acc'] || 0) + cost;
+          player.stats[stat] = Engine.statCurve.statFromAcc(player.statPoints[stat + '_acc']).stat;
+        }
       }
     }
 
-    // Re-check level up
+    // Re-check level up (cosmetic — no stat gains; just XP gold)
     const newLevels = [];
     while (player.xp >= player.xpToNextLevel) {
       player.xp -= player.xpToNextLevel;
       player.level += 1;
       player.xpToNextLevel = Engine.xpToNextLevel(player.level);
-      for (const stat of Object.keys(player.stats)) {
-        player.stats[stat] += 1;
-        player.statPoints[stat + '_acc'] += 10;
-      }
       player.gold += 50;
       newLevels.push(player.level);
     }
