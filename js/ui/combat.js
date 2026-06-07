@@ -299,4 +299,5 @@ function renderNoActiveMonster() {
   `;
 }
 
-Router.register('combat', renderCombat);
+Router.register('battles', renderCombat);
+Router.register('combat', renderCombat);  // alias for old hash bookmarks

@@ -1397,6 +1397,137 @@
   line-height: 1.4;
 }
 
+/* ── Macro nutrition card (dashboard) ─────────── */
+
+.macro-card .macro-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.macro-card .macro-row:last-child {
+  border-bottom: none;
+}
+
+.macro-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.macro-row-label {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.macro-row-text {
+  font-family: var(--font-display);
+  font-size: 0.4rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.macro-row-foot {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+  text-align: right;
+}
+
+/* ── Stat momentum card (dashboard) ─────────── */
+
+.momentum-card .momentum-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.momentum-card .momentum-row:last-child {
+  border-bottom: none;
+}
+
+.momentum-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.momentum-row-key {
+  font-family: var(--font-display);
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+}
+
+.momentum-net-chip {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-family: var(--font-display);
+  font-size: 0.36rem;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.momentum-net-pos {
+  color: var(--accent-green);
+  border-color: rgba(45, 198, 83, 0.4);
+  background: rgba(45, 198, 83, 0.08);
+}
+
+.momentum-net-neg {
+  color: var(--accent-red);
+  border-color: var(--accent-red-dim);
+  background: rgba(230, 57, 70, 0.08);
+}
+
+.momentum-net-neu {
+  color: var(--text-muted);
+  border-color: var(--border);
+  background: transparent;
+}
+
+.momentum-row-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.momentum-bar-half {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.momentum-bar-track {
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.momentum-bar-gain {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.momentum-bar-decay {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent-red-dim), var(--accent-red));
+  transition: width 0.4s ease;
+}
+
+.momentum-bar-text {
+  font-family: var(--font-display);
+  font-size: 0.36rem;
+  letter-spacing: 0.04em;
+}
+
+.momentum-bar-text.gain  { color: var(--accent-green); }
+.momentum-bar-text.decay { color: var(--accent-red); text-align: right; }
+
 /* ── Discipline tier banner (dashboard) + card (character) ── */
 
 .tier-banner {

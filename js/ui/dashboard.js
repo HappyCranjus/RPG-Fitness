@@ -12,7 +12,6 @@ function renderDashboard(container) {
   }
 
   const player   = Store.getPlayer();
-  const monsters = Store.getMonsters();
   const today    = Store.today();
   const weekStart = Store.weekStart();
   const rank     = Ranks.getRank(player);
@@ -22,8 +21,11 @@ function renderDashboard(container) {
   const todayRoutine   = todayRoutineId ? Routines.getRoutine(todayRoutineId) : null;
   const todayLog       = Store.getLog().filter(e => e.date === today);
   const tierInfo       = Engine.disciplineTier(player, todayLog);
+  const totals         = Engine.dailyTotals(todayLog);
   const bonus    = Engine.getActiveBonus(Date.now());
   const heroHtml = renderStatsHero(player, today);
+  const macroHtml = renderMacroCard(player, totals);
+  const momentumHtml = renderStatMomentumCard(player, totals, tierInfo);
   const bonusHtml = renderBonusBanner(bonus, Date.now());
   const forecastHtml = renderHpForecast(player);
   const tierHtml = renderTierBanner(tierInfo, player);
@@ -33,15 +35,11 @@ function renderDashboard(container) {
   const activeQuests = questState.active.filter(q => !q.completedAt && q.type !== 'milestone');
 
   const xpPct = Math.min(100, Math.round((player.xp / player.xpToNextLevel) * 100));
-  const monster = monsters.active;
-
-  const energy    = Math.floor(player.energy ?? player.maxEnergy ?? 35);
-  const maxEnergy = player.maxEnergy ?? (30 + player.stats.AGI * 5);
-  const energyPct = Math.max(0, Math.min(100, (energy / maxEnergy) * 100));
-  const regenRate = (3 + player.stats.AGI * 0.5).toFixed(1);
 
   container.innerHTML = `
     ${heroHtml}
+    ${macroHtml}
+    ${momentumHtml}
     ${forecastHtml}
     ${bonusHtml}
     ${tierHtml}
@@ -96,20 +94,6 @@ function renderDashboard(container) {
         <div class="progress-fill progress-fill-gold" style="width:${xpPct}%"></div>
       </div>
     </div>
-
-    <!-- Energy bar -->
-    <div class="card" style="padding:10px 16px 10px;cursor:pointer;" onclick="Router.navigate('combat')">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-        <span style="font-size:0.72rem;color:var(--text-muted);">⚡ ENERGY (tap to attack)</span>
-        <span style="font-family:var(--font-display);font-size:0.42rem;color:var(--accent-blue);">${energy} / ${maxEnergy}</span>
-      </div>
-      <div class="progress-track" style="height:6px;">
-        <div class="progress-fill energy-fill" style="width:${energyPct}%"></div>
-      </div>
-      <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Regens ${regenRate}/hr</div>
-    </div>
-
-    ${monster ? renderMonsterCard(monster) : renderNoMonster()}
 
     ${renderQuestSummary(activeQuests, questState, player)}
 
@@ -265,42 +249,116 @@ function formatBonusRemaining(ms) {
   return `${m}m left`;
 }
 
-function renderMonsterCard(monster) {
-  const hpPct = Math.max(0, Math.round((monster.hpCurrent / monster.hpMax) * 100));
-  const weakStr = (monster.weaknesses || []).map(capitalizeType).join(', ') || '—';
-  const resStr  = (monster.resistances || []).map(capitalizeType).join(', ') || '—';
+/* ── Macro nutrition card ───────────────────────── */
+
+function renderMacroCard(player, totals) {
+  const g = player.goals;
+  const sugarMax = g.dailyAddedSugarMaxG ?? 36;
+
+  const noMeals = totals.calories === 0 && totals.protein === 0
+                && totals.carbs === 0 && totals.fats === 0 && totals.sugar === 0;
+
+  if (noMeals) {
+    return `
+      <div class="card macro-card">
+        <div class="card-title" style="margin-bottom:6px;">TODAY'S NUTRITION</div>
+        <div class="muted-text" style="font-size:0.8rem;">No meals logged yet today — tap LOG below.</div>
+      </div>
+    `;
+  }
+
+  function row(label, icon, current, goal, color, unit, opts = {}) {
+    const goalSet = goal > 0;
+    const pct = goalSet ? Math.round((current / goal) * 100) : 0;
+    const barPct = goalSet ? Math.min(100, pct) : 0;
+    const goalText = goalSet ? `${current} / ${goal}${unit}` : `${current}${unit}`;
+    const overFlag = opts.over;
+    const rightLabel = goalSet
+      ? `${pct}%${overFlag ? ` · over by ${current - goal}${unit}` : ''}`
+      : `(goal not set)`;
+    const barClass = overFlag ? 'progress-fill-red' : color;
+    return `
+      <div class="macro-row">
+        <div class="macro-row-head">
+          <span class="macro-row-label">${icon} ${label}</span>
+          <span class="macro-row-text">${goalText}</span>
+        </div>
+        <div class="progress-track" style="height:6px;">
+          <div class="progress-fill ${barClass}" style="width:${barPct}%"></div>
+        </div>
+        <div class="macro-row-foot">${rightLabel}</div>
+      </div>
+    `;
+  }
+
+  const sugarOver = totals.sugar > sugarMax;
 
   return `
-    <div class="monster-card card-tapable" onclick="Router.navigate('combat')">
-      <div class="card-title" style="margin-bottom:10px;">ACTIVE MONSTER</div>
-      <div class="monster-header">
-        <span class="monster-art">${escHtml(monster.art)}</span>
-        <div class="monster-info">
-          <div class="monster-name">${escHtml(monster.name)}</div>
-          <div class="monster-tier">Tier ${Monsters.tierLabel(monster.tier)}</div>
-        </div>
-        <span style="color:var(--text-muted);font-size:0.8rem;">tap →</span>
-      </div>
-      <div class="monster-hp-label">
-        <span>HP</span>
-        <span class="monster-hp-value">${monster.hpCurrent} / ${monster.hpMax}</span>
-      </div>
-      <div class="progress-track">
-        <div class="progress-fill progress-fill-red" style="width:${hpPct}%"></div>
-      </div>
-      <div class="monster-tags mt-8">
-        <span class="tag tag-weak">Weak: ${weakStr}</span>
-        ${resStr !== '—' ? `<span class="tag tag-res">Res: ${resStr}</span>` : ''}
-      </div>
+    <div class="card macro-card">
+      <div class="card-title" style="margin-bottom:10px;">TODAY'S NUTRITION</div>
+      ${row('Calories', '🔥', totals.calories, g.dailyCalories || 0, 'progress-fill-gold', '')}
+      ${row('Protein',  '🥩', totals.protein,  g.dailyProteinG || 0, 'progress-fill-red',  'g')}
+      ${row('Carbs',    '🌾', totals.carbs,    g.dailyCarbsG  || 0, 'progress-fill-blue', 'g')}
+      ${row('Fats',     '🥑', totals.fats,     g.dailyFatsG   || 0, 'progress-fill-purple','g')}
+      ${row('Sugar',    '🍬', totals.sugar,    sugarMax,            'progress-fill-green','g', { over: sugarOver })}
     </div>
   `;
 }
 
-function renderNoMonster() {
+/* ── Stat momentum card (today's gain vs decay) ─── */
+
+function renderStatMomentumCard(player, totals, tierInfo) {
+  const stats = ['STR', 'AGI', 'VIT'];
+  const gains = { STR: totals.accSTR, AGI: totals.accAGI, VIT: totals.accVIT };
+  const decay = {};
+  for (const s of stats) {
+    decay[s] = Engine.STAT_DECAY_PER_DAY[s] * tierInfo.tier.mult;
+  }
+
+  // Shared scale so all bars are comparable.
+  const maxVal = Math.max(0.1,
+    ...Object.values(gains),
+    ...Object.values(decay));
+
+  function row(s) {
+    const gain = gains[s];
+    const dec  = decay[s];
+    const net  = gain - dec;
+    const gainPct = Math.round((gain / maxVal) * 100);
+    const decPct  = Math.round((dec  / maxVal) * 100);
+    const netCls  = net > 0.005 ? 'pos' : (net < -0.005 ? 'neg' : 'neu');
+    const netSign = net > 0 ? '+' : '';
+    return `
+      <div class="momentum-row">
+        <div class="momentum-row-head">
+          <span class="momentum-row-key stat-bar-${s.toLowerCase()}-text">${s}</span>
+          <span class="momentum-net-chip momentum-net-${netCls}">net ${netSign}${net.toFixed(2)}</span>
+        </div>
+        <div class="momentum-row-bars">
+          <div class="momentum-bar-half momentum-bar-gain-wrap">
+            <div class="momentum-bar-track">
+              <div class="momentum-bar-gain stat-bar-${s.toLowerCase()}" style="width:${gainPct}%"></div>
+            </div>
+            <span class="momentum-bar-text gain">+${gain.toFixed(2)}</span>
+          </div>
+          <div class="momentum-bar-half momentum-bar-decay-wrap">
+            <div class="momentum-bar-track">
+              <div class="momentum-bar-decay" style="width:${decPct}%"></div>
+            </div>
+            <span class="momentum-bar-text decay">-${dec.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   return `
-    <div class="card">
-      <div class="card-title">ACTIVE MONSTER</div>
-      <div class="muted-text mt-8">No monster active. Log a workout to spawn one!</div>
+    <div class="card momentum-card">
+      <div class="card-title" style="margin-bottom:6px;">STAT MOMENTUM (TODAY)</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;">
+        Gained from training vs lost to decay at <strong style="color:${tierInfo.tier.color};">${tierInfo.tier.label}</strong> (×${tierInfo.tier.mult.toFixed(2)}).
+      </div>
+      ${stats.map(row).join('')}
     </div>
   `;
 }

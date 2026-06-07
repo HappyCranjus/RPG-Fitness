@@ -847,6 +847,11 @@ const Engine = (() => {
     logEntry.xpEarned    = xpResult.total;
     logEntry.routineBonus = routineBonus;
     logEntry.statsGained = statsGained;
+    logEntry.statDeltas  = {
+      STR: delta.STR_acc || 0,
+      AGI: delta.AGI_acc || 0,
+      VIT: delta.VIT_acc || 0,
+    };
 
     Store.appendLog(logEntry);
     Store.setPlayer(player);
@@ -914,6 +919,27 @@ const Engine = (() => {
     return Math.max(0, CYCLE_DAYS - elapsed);
   }
 
+  // Sum macro & stat-delta totals across a list of log entries from one day.
+  function dailyTotals(todayLog) {
+    const t = { calories: 0, protein: 0, carbs: 0, fats: 0, sugar: 0,
+                accSTR: 0, accAGI: 0, accVIT: 0 };
+    for (const e of (todayLog || [])) {
+      for (const m of (e.meals || [])) {
+        t.calories += m.calories    || 0;
+        t.protein  += m.proteinG    || 0;
+        t.carbs    += m.carbsG      || 0;
+        t.fats     += m.fatsG       || 0;
+        t.sugar    += m.addedSugarG || 0;
+      }
+      if (e.statDeltas) {
+        t.accSTR += e.statDeltas.STR || 0;
+        t.accAGI += e.statDeltas.AGI || 0;
+        t.accVIT += e.statDeltas.VIT || 0;
+      }
+    }
+    return t;
+  }
+
   // Time until the next 30-min stat decay tick fires.
   function msUntilNextStatTick(player, now) {
     if (!player.lastStatDecayTickAt) return STAT_DECAY_TICK_MS;
@@ -974,6 +1000,7 @@ const Engine = (() => {
     daysUntilCycleEnd,
     msUntilNextStatTick,
     msUntilNextHpTick,
+    dailyTotals,
 
     // bonus rotation
     getActiveBonus,
