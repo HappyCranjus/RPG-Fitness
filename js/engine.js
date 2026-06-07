@@ -346,10 +346,6 @@ const Engine = (() => {
       }
     }
 
-    if (logEntry.meals.length > 0) {
-      delta.VIT_acc += logEntry.meals.length * 0.5;
-    }
-
     return { delta, bonusApplied };
   }
 

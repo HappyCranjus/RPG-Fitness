@@ -37,8 +37,8 @@ function renderCharacter(container) {
     },
     { key: 'VIT', barClass: 'stat-bar-vit',
       role: `Max HP (${hpMax}) + passive HP-decay resistance (${Math.round(Math.min(0.3, player.stats.VIT * 0.01) * 100)}% slower drain).`,
-      grow: 'Cardio: Hiking (0.5/min, king), Jogging & Cycling (0.4/min), Swimming (0.3/min). +0.5 per logged meal.',
-      fastest: 'Hiking + log every meal — densest gain plus the free-VIT-for-logging bonus.',
+      grow: 'Cardio only: Hiking (0.5/min, king), Jogging & Cycling (0.4/min), Swimming (0.3/min), Basketball/Yoga/Dog walking (0.2/min). Plus Burpees (0.04/rep) and Plank (0.01/sec).',
+      fastest: 'Hiking — 0.5/min is the densest VIT gain in the game. 60min hike = +30 VIT acc.',
       decay: `${Engine.STAT_DECAY_PER_DAY.VIT} acc/day × ${tierInfo.tier.mult.toFixed(2)} tier = ${(Engine.STAT_DECAY_PER_DAY.VIT * tierInfo.tier.mult).toFixed(2)}/day.`,
     },
   ];
