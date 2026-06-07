@@ -41,6 +41,16 @@ const Routines = (() => {
         { kind: 'activity', id: 'act_jog', target: { minutes: 15 } },
       ],
     },
+    {
+      id: 'rt_e_yoga',
+      name: 'Calm Start',
+      rank: 'E',
+      focus: 'mobility',
+      flavor: 'Breathe. Stretch. The grind can wait.',
+      items: [
+        { kind: 'activity', id: 'act_yoga', target: { minutes: 20 } },
+      ],
+    },
 
     /* ─── D RANK ─── */
     {
@@ -73,6 +83,18 @@ const Routines = (() => {
       flavor: 'Conversational pace — finish strong.',
       items: [
         { kind: 'activity', id: 'act_jog', target: { minutes: 20 } },
+      ],
+    },
+    {
+      id: 'rt_d_lunge',
+      name: 'Leg Drill',
+      rank: 'D',
+      focus: 'legs',
+      flavor: 'Step. Burn. Repeat.',
+      items: [
+        { kind: 'exercise', id: 'ex_lunge', target: { sets: 3, reps: 12 } },
+        { kind: 'exercise', id: 'ex_squat', target: { sets: 3, reps: 15 } },
+        { kind: 'exercise', id: 'ex_plank', target: { sets: 2, reps: 30 } },
       ],
     },
 
@@ -110,6 +132,18 @@ const Routines = (() => {
         { kind: 'activity', id: 'act_swim', target: { minutes: 30 } },
       ],
     },
+    {
+      id: 'rt_c_burpee',
+      name: 'Burpee Burner',
+      rank: 'C',
+      focus: 'full',
+      flavor: 'No equipment. No mercy.',
+      items: [
+        { kind: 'exercise', id: 'ex_burpee', target: { sets: 4, reps: 10 } },
+        { kind: 'exercise', id: 'ex_pushup', target: { sets: 3, reps: 15 } },
+        { kind: 'exercise', id: 'ex_situp',  target: { sets: 3, reps: 20 } },
+      ],
+    },
 
     /* ─── B RANK ─── */
     {
@@ -144,6 +178,18 @@ const Routines = (() => {
       flavor: 'Real-world agility — chase the win.',
       items: [
         { kind: 'activity', id: 'act_bball', target: { minutes: 45 } },
+      ],
+    },
+    {
+      id: 'rt_b_gym',
+      name: 'Gym Day',
+      rank: 'B',
+      focus: 'upper',
+      flavor: 'Iron up. Move with intent.',
+      items: [
+        { kind: 'exercise', id: 'ex_bench',    target: { sets: 4, reps: 8 } },
+        { kind: 'exercise', id: 'ex_row',      target: { sets: 4, reps: 8 } },
+        { kind: 'exercise', id: 'ex_dumbbell', target: { sets: 3, reps: 12 } },
       ],
     },
 

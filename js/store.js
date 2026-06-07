@@ -60,6 +60,10 @@ const Store = (() => {
       knockedOut:      false,
       hpDmgDealt:      null,
       hpRegenCredited: null,
+      // Survival-loop anchors — lazy-tick like lastEnergyUpdate.
+      lastHpTickAt:        Date.now(),
+      lastMonsterAttackAt: Date.now(),
+      dailyHealsAwarded:   { date: today, cal800: false, cal1600: false, protein: false },
       energy:          35,
       maxEnergy:       35,
       lastEnergyUpdate: null,
@@ -114,6 +118,18 @@ const Store = (() => {
     if (p.macroGoalHits === undefined) {
       p.macroGoalHits = 0;
     }
+    // Survival-loop migration: initialize anchors to now so existing
+    // saves don't take retroactive damage on first load after the update.
+    const now = Date.now();
+    if (p.lastHpTickAt === undefined) {
+      p.lastHpTickAt = now;
+    }
+    if (p.lastMonsterAttackAt === undefined) {
+      p.lastMonsterAttackAt = now;
+    }
+    if (!p.dailyHealsAwarded || p.dailyHealsAwarded.date === undefined) {
+      p.dailyHealsAwarded = { date: today, cal800: false, cal1600: false, protein: false };
+    }
     return p;
   }
 
@@ -162,6 +178,10 @@ const Store = (() => {
     },
     setSchedule(s) { set('schedule', s); },
 
+    getBonus()      { return get('bonus') || null; },
+    setBonus(b)     { set('bonus', b); },
+    clearBonus()    { localStorage.removeItem(PREFIX + 'bonus'); },
+
     getStatHistory() { return get('statHistory') || []; },
     recordStatSnapshot(player, today) {
       const hist = get('statHistory') || [];
@@ -183,7 +203,7 @@ const Store = (() => {
 
     clearAll() {
       ['player','log','quests','monsters','achievements','settings',
-       'attacks','cycleHistory','schedule','statHistory'].forEach(k => {
+       'attacks','cycleHistory','schedule','statHistory','bonus'].forEach(k => {
         localStorage.removeItem(PREFIX + k);
       });
     },

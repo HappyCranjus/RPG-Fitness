@@ -250,6 +250,33 @@ function updateStatHeader() {
   } else {
     hdr.classList.remove('knocked-out');
   }
+
+  updateFedChip();
+}
+
+function updateFedChip() {
+  const el = document.getElementById('hdr-fed');
+  if (!el) return;
+  const log = Store.getLog();
+  let latestMealTs = 0;
+  for (const entry of log) {
+    if (entry.meals && entry.meals.length > 0 && entry.timestamp > latestMealTs) {
+      latestMealTs = entry.timestamp;
+    }
+  }
+  if (!latestMealTs) {
+    el.textContent = '🍽 Not yet fed';
+    el.className = 'hdr-fed hdr-fed-warn';
+    return;
+  }
+  const hoursSince = Math.floor((Date.now() - latestMealTs) / 3600000);
+  el.textContent = hoursSince === 0
+    ? '🍽 Fed just now'
+    : `🍽 Fed ${hoursSince}h ago`;
+  let cls = 'hdr-fed';
+  if (hoursSince >= 16)      cls += ' hdr-fed-danger';
+  else if (hoursSince >= 8)  cls += ' hdr-fed-warn';
+  el.className = cls;
 }
 
 Bus.on('stats-updated', updateStatHeader);
@@ -282,8 +309,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const player    = Store.getPlayer();
     const rollResult  = Engine.rolloverCycleIfNeeded(player, today);
     const decayResult = Engine.applyStatDecay(player, today);
+
+    // Apply passive HP decay + monster 6h attack ticks
+    const activeMonster = Store.getMonsters().active;
+    const survival = Engine.applySurvivalTicks(player, activeMonster, Date.now());
     Store.setPlayer(player);
     Store.recordStatSnapshot(player, today);
+
+    // Roll a new 6-hour activity bonus if the prior one expired
+    const priorBonus = Store.getBonus();
+    const activeBonus = Engine.getActiveBonus(Date.now());
+    const bonusJustRolled = priorBonus && activeBonus.itemId !== priorBonus.itemId
+                          && priorBonus.windowEnd <= Date.now();
 
     if (rollResult.rolled) {
       Toast.show('🔄 New 2-week cycle started! Level reset; stats preserved.', 'info');
@@ -291,6 +328,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (Object.keys(decayResult.decayed).length > 0) {
       const lost = Object.entries(decayResult.decayed).map(([s, v]) => `${s}-${v}`).join(' ');
       Toast.show('💀 Stat decay from inactivity: ' + lost, 'info');
+    }
+    if (survival.attack.ticksApplied > 0 && activeMonster && !survival.knockedOut) {
+      const name = activeMonster.name || 'Monster';
+      Toast.show(`💢 ${name} struck ${survival.attack.ticksApplied}× (-${survival.attack.damage} HP)`, 'info');
+    }
+    if (survival.decay.damage > 0 && !survival.knockedOut) {
+      Toast.show(`⏳ Hunger drain: -${survival.decay.damage} HP. Eat something!`, 'info');
+    }
+    if (survival.knockedOut) {
+      Toast.show('💀 You collapsed from hunger! Eat to recover.', 'info');
+    }
+    if (bonusJustRolled) {
+      Toast.show(`⭐ New bonus: ${activeBonus.icon} ${activeBonus.label} — +25% for 6h`, 'success');
     }
 
     updateStatHeader();

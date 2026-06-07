@@ -8,6 +8,9 @@ const ACTIVITY_DEFS = [
   { id: 'act_swim',    name: 'Swimming',           icon: '🏊', calPerMin: 9,  type: 'cardio' },
   { id: 'act_bball',   name: 'Basketball / Sports',icon: '🏀', calPerMin: 8,  type: 'sports' },
   { id: 'act_walkdog', name: 'Walking the Dog',    icon: '🐕', calPerMin: 4,  type: 'cardio' },
+  { id: 'act_cycle',   name: 'Cycling',            icon: '🚴', calPerMin: 8,  type: 'cardio' },
+  { id: 'act_hike',    name: 'Hiking',             icon: '🥾', calPerMin: 6,  type: 'cardio' },
+  { id: 'act_yoga',    name: 'Yoga / Stretching',  icon: '🧘', calPerMin: 3,  type: 'misc' },
   { id: 'act_custom',  name: 'Custom Activity',    icon: '⚡', calPerMin: 6,  type: 'misc' },
 ];
 
@@ -16,8 +19,14 @@ const EXERCISE_DEFS = [
   { id: 'ex_situp',    name: 'Sit-ups / Crunches', icon: '🔥', type: 'bodyweight' },
   { id: 'ex_pullup',   name: 'Pull-ups / Chin-ups',icon: '🏋️', type: 'bodyweight' },
   { id: 'ex_squat',    name: 'Squats',             icon: '🦵', type: 'bodyweight' },
+  { id: 'ex_lunge',    name: 'Lunges',             icon: '🦵', type: 'bodyweight' },
+  { id: 'ex_dip',      name: 'Dips',               icon: '💪', type: 'bodyweight' },
+  { id: 'ex_burpee',   name: 'Burpees',            icon: '🔥', type: 'bodyweight' },
+  { id: 'ex_plank',    name: 'Plank (sec held)',   icon: '⏱', type: 'bodyweight' },
   { id: 'ex_idl',      name: 'Inverted Leg Raises',icon: '🦵', type: 'bodyweight' },
   { id: 'ex_dumbbell', name: 'Dumbbell Exercise',  icon: '🏋️', type: 'weighted' },
+  { id: 'ex_bench',    name: 'Bench Press',        icon: '🏋️', type: 'weighted' },
+  { id: 'ex_row',      name: 'Bent-over Row',      icon: '🏋️', type: 'weighted' },
   { id: 'ex_custom',   name: 'Custom Exercise',    icon: '⚡', type: 'bodyweight' },
 ];
 
@@ -222,10 +231,14 @@ function renderActivityRow(idx) {
     `<option value="${d.id}" ${d.id === entry.activityId ? 'selected' : ''}>${escHtml(d.icon + ' ' + d.name)}</option>`
   ).join('');
 
+  const bonus = Engine.getActiveBonus(Date.now());
+  const bonusChip = (bonus && bonus.kind === 'activity' && bonus.itemId === entry.activityId)
+    ? `<span class="bonus-chip-inline">⭐ +25% bonus</span>` : '';
+
   el.innerHTML = `
     <div class="form-row" style="align-items:start;">
       <div class="form-group" style="margin:0;">
-        <label class="form-label">Activity</label>
+        <label class="form-label">Activity ${bonusChip}</label>
         <select id="act-type-${idx}">${opts}</select>
         ${entry.activityId === 'act_custom' ? `<input id="act-custom-name-${idx}" placeholder="Name" value="${escHtml(entry.customName||'')}" style="margin-top:6px;">` : ''}
       </div>
@@ -305,9 +318,13 @@ function renderExerciseRow(idx) {
     `<option value="${d.id}" ${d.id === entry.exerciseId ? 'selected' : ''}>${escHtml(d.icon + ' ' + d.name)}</option>`
   ).join('');
 
+  const bonus = Engine.getActiveBonus(Date.now());
+  const bonusChip = (bonus && bonus.kind === 'exercise' && bonus.itemId === entry.exerciseId)
+    ? `<span class="bonus-chip-inline">⭐ +25% bonus</span>` : '';
+
   el.innerHTML = `
     <div class="form-group" style="margin-bottom:10px;">
-      <label class="form-label">Exercise</label>
+      <label class="form-label">Exercise ${bonusChip}</label>
       <select id="ex-type-${idx}">${opts}</select>
       ${entry.exerciseId === 'ex_custom' ? `<input id="ex-custom-name-${idx}" placeholder="Exercise name" value="${escHtml(entry.customName||'')}" style="margin-top:6px;">` : ''}
     </div>
@@ -444,12 +461,15 @@ function renderMealRow(idx) {
     logState.meals[idx].carbsG    = parseInt(document.getElementById('meal-carbs-' + idx)?.value) || 0;
     logState.meals[idx].fatsG     = parseInt(document.getElementById('meal-fats-' + idx)?.value) || 0;
 
-    // Live quality indicator
+    // Live quality indicator — shows nutrition classification + the heal
+    // assuming you're still under today's calorie goal.
     const m = logState.meals[idx];
     const qualEl = document.getElementById('meal-quality-' + idx);
-    if (qualEl && (m.calories > 0 || m.proteinG > 0 || m.carbsG > 0 || m.fatsG > 0)) {
-      const q = Engine.computeMealHP(m);
-      qualEl.textContent = `${q.emoji} ${q.label} — ${q.hpDelta > 0 ? '+' : ''}${q.hpDelta} HP`;
+    if (qualEl && (m.calories > 0 || m.proteinG > 0)) {
+      const cls = Engine.classifyMeal(m);
+      const goal = (Store.getPlayer()?.goals?.dailyCalories) || 2000;
+      const heal = Engine.computeMealHeal(m, 0, goal);
+      qualEl.textContent = `${cls.emoji} ${cls.label} — +${heal} HP`;
       qualEl.style.display = 'inline-block';
     } else if (qualEl) {
       qualEl.style.display = 'none';
@@ -480,6 +500,8 @@ const ACTIVITY_XP_MOD  = { cardio: 1.0, sports: 1.1, misc: 0.9 };
 const EXERCISE_XP_RATE = {
   ex_pushup: 0.4, ex_situp: 0.3, ex_pullup: 0.8,
   ex_squat: 0.4, ex_idl: 0.5, ex_dumbbell: 0.5,
+  ex_lunge: 0.4, ex_dip: 0.7, ex_burpee: 1.2, ex_plank: 0.1,
+  ex_bench: 0.7, ex_row: 0.6,
 };
 
 function updatePreview() {
@@ -523,24 +545,31 @@ function updatePreview() {
     `);
   }
 
-  // HP rows from meals
+  // HP rows from meals — preview uses running calorie total starting from
+  // today's already-logged meals, so per-meal heal cuts off when the user
+  // crosses their goal.
+  const dailyCalGoal = player.goals.dailyCalories;
+  const todayEntries = Store.getLog().filter(e => e.date === Store.today());
+  let runningCal = todayEntries.reduce((sum, e) =>
+    sum + e.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
   let totalHpDelta = 0;
-  const hpRows = logState.meals.map(m => {
-    if (m.calories === 0 && m.proteinG === 0) return '';
-    const q = Engine.computeMealHP(m);
-    const mitigated = Engine.applyDISMitigation(q.hpDelta, player.stats.DIS);
-    totalHpDelta += mitigated;
-    const mealXP = 10 + Math.floor((m.proteinG || 0) * 0.2);
-    totalXP += mealXP;
-    const cls  = mitigated > 0 ? 'hp-gain' : mitigated < 0 ? 'hp-loss' : 'hp-neutral';
-    const sign = mitigated > 0 ? '+' : '';
-    return `
+  const hpRows = [];
+  for (const m of logState.meals) {
+    if (m.calories === 0 && m.proteinG === 0) continue;
+    const cls  = Engine.classifyMeal(m);
+    const heal = Engine.computeMealHeal(m, runningCal, dailyCalGoal);
+    totalHpDelta += heal;
+    runningCal   += m.calories || 0;
+    const mealXP  = 15 + Math.floor((m.proteinG || 0) * 0.2);
+    totalXP      += mealXP;
+    const hpCls = heal > 0 ? 'hp-gain' : 'hp-neutral';
+    hpRows.push(`
       <div class="preview-item">
-        <span class="preview-item-name">${escHtml(m.name || 'Meal')} ${q.emoji}</span>
-        <span class="preview-item-hp ${cls}">${sign}${mitigated} HP</span>
+        <span class="preview-item-name">${escHtml(m.name || 'Meal')} ${cls.emoji}</span>
+        <span class="preview-item-hp ${hpCls}">+${heal} HP</span>
       </div>
-    `;
-  }).filter(Boolean);
+    `);
+  }
 
   const allRows = [...xpRows, ...hpRows];
   if (allRows.length > 0) {
@@ -614,19 +643,23 @@ function showResultModal(results) {
     `<div style="color:var(--accent-green);font-size:0.82rem;">✅ ${escHtml(u.quest.title)} — COMPLETE!</div>`
   ).join('');
 
-  // HP change rows
+  // HP change rows — per-meal heal lines (all positive in the new model)
   const hpRows = (results.mealQualities || []).map(q =>
     `<div class="result-row">
-      <span class="result-label">${escHtml(q.name || 'Meal')} ${q.emoji}</span>
-      <span class="result-value ${q.hpDelta >= 0 ? 'green' : 'red'}">${q.hpDelta >= 0 ? '+' : ''}${q.hpDelta} HP</span>
+      <span class="result-label">🍽 ${escHtml(q.name || 'Meal')} ${q.emoji}</span>
+      <span class="result-value ${q.hp > 0 ? 'green' : ''}">+${q.hp} HP</span>
     </div>`
   ).join('');
 
-  const overageLine = results.overagePenalty > 0
-    ? `<div class="result-row"><span class="result-label">⚠️ Calorie Overage</span><span class="result-value red">-${results.overagePenalty} HP</span></div>`
+  const bd = results.hpBreakdown || {};
+  const cal800Line = bd.cal800Bonus > 0
+    ? `<div class="result-row"><span class="result-label">🎯 Calorie milestone (800)</span><span class="result-value green">+${bd.cal800Bonus} HP</span></div>`
     : '';
-  const regenLine = results.regenBonus > 0
-    ? `<div class="result-row"><span class="result-label">💪 Protein Goal!</span><span class="result-value green">+${results.regenBonus} HP</span></div>`
+  const cal1600Line = bd.cal1600Bonus > 0
+    ? `<div class="result-row"><span class="result-label">🎯 Calorie milestone (1600)</span><span class="result-value green">+${bd.cal1600Bonus} HP</span></div>`
+    : '';
+  const proteinLine = bd.proteinBonus > 0
+    ? `<div class="result-row"><span class="result-label">🥩 Protein goal hit!</span><span class="result-value green">+${bd.proteinBonus} HP</span></div>`
     : '';
 
   const html = `
@@ -651,11 +684,16 @@ function showResultModal(results) {
       <span class="result-label">📋 Routine Bonus</span>
       <span class="result-value gold">+${results.routineBonus}</span>
     </div>` : ''}
+    ${results.bonusApplied && results.bonus ? `
+    <div class="result-row">
+      <span class="result-label">⭐ ${results.bonus.icon} ${escHtml(results.bonus.label)} Bonus</span>
+      <span class="result-value gold">+25% STAT</span>
+    </div>` : ''}
 
-    ${(hpRows || overageLine || regenLine) ? `
+    ${(hpRows || cal800Line || cal1600Line || proteinLine) ? `
     <div class="divider"></div>
     <div class="section-label">HEALTH</div>
-    ${hpRows}${overageLine}${regenLine}
+    ${hpRows}${cal800Line}${cal1600Line}${proteinLine}
     <div class="result-row">
       <span class="result-label">HP Now</span>
       <span class="result-value ${results.knockedOut ? 'red' : 'green'}">${results.hpAfter} / ${results.hpMax}</span>

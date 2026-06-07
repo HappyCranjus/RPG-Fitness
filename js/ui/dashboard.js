@@ -2,7 +2,15 @@
    Dashboard screen
    ───────────────────────────────────────────── */
 
+let _bonusCountdownTimer = null;
+
 function renderDashboard(container) {
+  // Clear any prior bonus countdown timer
+  if (_bonusCountdownTimer) {
+    clearInterval(_bonusCountdownTimer);
+    _bonusCountdownTimer = null;
+  }
+
   const player   = Store.getPlayer();
   const monsters = Store.getMonsters();
   const today    = Store.today();
@@ -14,6 +22,10 @@ function renderDashboard(container) {
   const todayRoutine   = todayRoutineId ? Routines.getRoutine(todayRoutineId) : null;
   const decayStatus    = Engine.statDecayStatus(player, today);
   const decayWarnings  = Object.entries(decayStatus).filter(([, s]) => s.isDecaying || s.decayingIn === 0);
+  const bonus    = Engine.getActiveBonus(Date.now());
+  const heroHtml = renderStatsHero(player, today, decayStatus);
+  const bonusHtml = renderBonusBanner(bonus, Date.now());
+  const forecastHtml = renderHpForecast(player);
 
   // Refresh quests for today
   const questState = Quests.refresh(today, weekStart);
@@ -28,6 +40,10 @@ function renderDashboard(container) {
   const regenRate = (3 + player.stats.AGI * 0.5).toFixed(1);
 
   container.innerHTML = `
+    ${heroHtml}
+    ${forecastHtml}
+    ${bonusHtml}
+
     <!-- Rank + cycle card -->
     <div class="rank-card" style="border-color:${rank.color};box-shadow:0 0 14px ${rank.glow};">
       <div class="rank-card-row">
@@ -116,6 +132,136 @@ function renderDashboard(container) {
 
     <div class="tap-hint mt-8">Gold: ${player.gold} 🪙</div>
   `;
+
+  // Tick the bonus countdown text once a minute (no full re-render).
+  _bonusCountdownTimer = setInterval(() => {
+    const el = document.getElementById('bonus-countdown');
+    if (!el) {
+      clearInterval(_bonusCountdownTimer);
+      _bonusCountdownTimer = null;
+      return;
+    }
+    const cur = Engine.getActiveBonus(Date.now());
+    if (cur.itemId !== bonus.itemId) {
+      // Bonus expired and rolled to a new one — re-render dashboard.
+      renderDashboard(container);
+      return;
+    }
+    el.textContent = formatBonusRemaining(cur.windowEnd - Date.now());
+  }, 60 * 1000);
+}
+
+/* ── Stats hero panel (above rank card) ─────────── */
+
+function renderStatsHero(player, today, decayStatus) {
+  const history = Store.getStatHistory();
+  // Most recent snapshot strictly before today, for delta vs yesterday-ish.
+  const prev = history.filter(h => h.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
+
+  const statDefs = [
+    { key: 'STR', barClass: 'stat-bar-str' },
+    { key: 'AGI', barClass: 'stat-bar-agi' },
+    { key: 'VIT', barClass: 'stat-bar-vit' },
+    { key: 'DIS', barClass: 'stat-bar-dis' },
+  ];
+
+  const rows = statDefs.map(({ key, barClass }) => {
+    const val = player.stats[key];
+    const acc = player.statPoints[key + '_acc'] || 0;
+    const progressInLevel = acc % 10;
+    const pct = Math.min(100, Math.round((progressInLevel / 10) * 100));
+
+    let deltaChip = '';
+    if (prev) {
+      const d = val - (prev[key] || 0);
+      if (d > 0) deltaChip = `<span class="delta-chip">+${d} today</span>`;
+    }
+
+    const ds = decayStatus[key];
+    let decayChip = '';
+    if (ds) {
+      if (ds.isDecaying) {
+        decayChip = `<span class="decay-chip">⚠ -${ds.idle - Engine.DECAY_GRACE_DAYS}d</span>`;
+      } else if (ds.decayingIn <= 1) {
+        decayChip = `<span class="decay-chip soon">⚠ soon</span>`;
+      }
+    }
+
+    return `
+      <div class="stats-hero-row">
+        <span class="stats-hero-key ${barClass}-text">${key}</span>
+        <span class="stats-hero-val">${val}</span>
+        <div class="stats-hero-bar-col">
+          <div class="stats-hero-bar-track">
+            <div class="stat-bar-fill ${barClass}" style="width:${pct}%"></div>
+          </div>
+          <span class="stats-hero-bar-text">${progressInLevel.toFixed(1)}/10</span>
+        </div>
+        <div class="stats-hero-chips">${deltaChip}${decayChip}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="stats-hero-card">
+      <div class="stats-hero-title">YOUR STATS</div>
+      ${rows}
+      <div class="stats-hero-footnote">Every 10 progress = +1 stat. STR→ATK · AGI→energy · VIT→HP · DIS→damage resist</div>
+    </div>
+  `;
+}
+
+/* ── HP forecast (shown when you've been silent on meals) ── */
+
+function renderHpForecast(player) {
+  if (player.knockedOut) return '';
+  const log = Store.getLog();
+  let latestMealTs = 0;
+  for (const entry of log) {
+    if (entry.meals && entry.meals.length > 0 && entry.timestamp > latestMealTs) {
+      latestMealTs = entry.timestamp;
+    }
+  }
+  const hoursSinceMeal = latestMealTs
+    ? (Date.now() - latestMealTs) / 3600000
+    : Infinity;
+  if (hoursSinceMeal < 12) return '';
+
+  const damagePerHour = Engine.HP_DECAY_PER_HOUR + Engine.MONSTER_ATTACK_DAMAGE / 6;
+  const hoursToKo = Math.max(0, Math.round((player.hp || 0) / damagePerHour));
+  if (hoursToKo > 72) return '';
+  const label = hoursToKo <= 0
+    ? 'KO imminent — eat now!'
+    : `KO in ~${hoursToKo}h at current pace`;
+  return `<div class="hp-forecast">⏳ ${label}</div>`;
+}
+
+/* ── 6-hour bonus banner ─────────────────────────── */
+
+function renderBonusBanner(bonus, now) {
+  const remainingMs = Math.max(0, bonus.windowEnd - now);
+  const remainingTxt = formatBonusRemaining(remainingMs);
+  return `
+    <div class="bonus-banner">
+      <div class="bonus-banner-row">
+        <span class="bonus-banner-icon">${bonus.icon}</span>
+        <div class="bonus-banner-body">
+          <div class="bonus-banner-title">⭐ BONUS ACTIVE</div>
+          <div class="bonus-banner-text">${escHtml(bonus.label)} · +25% stat gain</div>
+        </div>
+        <span class="bonus-banner-countdown" id="bonus-countdown">${remainingTxt}</span>
+      </div>
+    </div>
+  `;
+}
+
+function formatBonusRemaining(ms) {
+  if (ms <= 0) return '0m left';
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h > 0) return `${h}h ${m}m left`;
+  return `${m}m left`;
 }
 
 function renderMonsterCard(monster) {

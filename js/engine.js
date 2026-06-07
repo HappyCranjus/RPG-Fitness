@@ -9,6 +9,18 @@ const Engine = (() => {
   const DECAY_GRACE_DAYS   = 3;
   const DECAY_RATE_PER_DAY = { STR: 1.0, AGI: 0.7, VIT: 0.5, DIS: 1.5 };
 
+  // Survival loop: passive HP drain + monster 6-hour ticks.
+  // Combined target ≈ 88 HP/day at base rates.
+  const HP_DECAY_PER_HOUR          = 2;
+  const MONSTER_ATTACK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  const MONSTER_ATTACK_DAMAGE      = 10;
+
+  // Daily HP bonuses for hitting nutrition milestones.
+  const CAL_HEAL_BONUS_1   = 800;
+  const CAL_HEAL_BONUS_2   = 1600;
+  const CAL_HEAL_BONUS_HP  = 10;
+  const PROTEIN_HEAL_BONUS = 30;
+
   // XP needed to reach the next level from `level`
   function xpToNextLevel(level) {
     return Math.floor(100 * Math.pow(level, 1.4));
@@ -36,6 +48,63 @@ const Engine = (() => {
     const regen = hoursElapsed * (3 + player.stats.AGI * 0.5);
     player.energy = Math.min(player.maxEnergy || 35, (player.energy || 0) + regen);
     player.lastEnergyUpdate = new Date().toISOString();
+  }
+
+  /* ── Passive HP decay (lazy, applied on app open) ──
+     Drains HP at HP_DECAY_PER_HOUR. Advances anchor only by the
+     consumed time so partial intervals carry forward and frequent
+     check-ins don't accidentally lose decay.
+  ─────────────────────────────────────────────── */
+
+  function applyHpDecay(player, now) {
+    if (!player.lastHpTickAt) {
+      player.lastHpTickAt = now;
+      return { damage: 0 };
+    }
+    if (player.knockedOut) {
+      player.lastHpTickAt = now;
+      return { damage: 0 };
+    }
+    const msPerUnit = 3600000 / HP_DECAY_PER_HOUR;
+    const elapsed   = now - player.lastHpTickAt;
+    const units     = Math.floor(elapsed / msPerUnit);
+    if (units <= 0) return { damage: 0 };
+    player.hp = Math.max(0, (player.hp || 0) - units);
+    player.lastHpTickAt += units * msPerUnit;
+    return { damage: units };
+  }
+
+  /* ── Monster 6-hour attack ticks (lazy) ──
+     The active monster lands MONSTER_ATTACK_DAMAGE every 6h. If the
+     player has been offline for 18h, three ticks apply at once.
+     Knocked-out players take no further attacks until they recover.
+  ─────────────────────────────────────────────── */
+
+  function applyMonsterAttacks(player, monster, now) {
+    if (!monster || !player.lastMonsterAttackAt || player.knockedOut) {
+      player.lastMonsterAttackAt = now;
+      return { damage: 0, ticksApplied: 0 };
+    }
+    const elapsed = now - player.lastMonsterAttackAt;
+    const ticks   = Math.floor(elapsed / MONSTER_ATTACK_INTERVAL_MS);
+    if (ticks <= 0) return { damage: 0, ticksApplied: 0 };
+    const damage = ticks * MONSTER_ATTACK_DAMAGE;
+    player.hp = Math.max(0, (player.hp || 0) - damage);
+    player.lastMonsterAttackAt += ticks * MONSTER_ATTACK_INTERVAL_MS;
+    return { damage, ticksApplied: ticks };
+  }
+
+  // Combined survival tick used on bootstrap. Returns the damage from each
+  // source and whether the cumulative damage knocked the player out.
+  function applySurvivalTicks(player, monster, now) {
+    const decay  = applyHpDecay(player, now);
+    const attack = applyMonsterAttacks(player, monster, now);
+    let knockedOut = false;
+    if (player.hp <= 0 && !player.knockedOut) {
+      triggerKnockOut(player);
+      knockedOut = true;
+    }
+    return { decay, attack, knockedOut };
   }
 
   /* ── DIS mitigation for negative HP deltas ── */
@@ -84,6 +153,8 @@ const Engine = (() => {
   const EXERCISE_XP_PER_REP = {
     ex_pushup:   0.4, ex_situp:  0.3, ex_pullup:  0.8,
     ex_squat:    0.4, ex_idl:    0.5, ex_dumbbell: 0.5,
+    ex_lunge:    0.4, ex_dip:    0.7, ex_burpee:  1.2,
+    ex_plank:    0.1, ex_bench:  0.7, ex_row:     0.6,
   };
 
   function computeXP(logEntry, streakDays) {
@@ -105,7 +176,8 @@ const Engine = (() => {
     }
 
     for (const m of logEntry.meals) {
-      const xp = 10 + Math.floor((m.proteinG || 0) * 0.2);
+      // Base 15 XP per meal — rewards logging anything, healthy or not.
+      const xp = 15 + Math.floor((m.proteinG || 0) * 0.2);
       total += xp;
     }
 
@@ -122,6 +194,9 @@ const Engine = (() => {
     act_swim:    { STR: 0.2, VIT: 0.3, AGI: 0.3 },
     act_bball:   { STR: 0.1, VIT: 0.2, AGI: 0.5 },
     act_walkdog: { VIT: 0.2 },
+    act_cycle:   { STR: 0.1, VIT: 0.4, AGI: 0.1 },
+    act_hike:    { STR: 0.1, VIT: 0.5 },
+    act_yoga:    { AGI: 0.4, VIT: 0.2 },
   };
 
   const EXERCISE_STAT_PER_REP = {
@@ -131,23 +206,88 @@ const Engine = (() => {
     ex_squat:    { STR: 0.06 },
     ex_idl:      { STR: 0.07 },
     ex_dumbbell: { STR: 0.08 },
+    ex_lunge:    { STR: 0.05, AGI: 0.02 },
+    ex_dip:      { STR: 0.10 },
+    ex_burpee:   { STR: 0.05, AGI: 0.05, VIT: 0.04 },
+    ex_plank:    { STR: 0.02, VIT: 0.01 },
+    ex_bench:    { STR: 0.12 },
+    ex_row:      { STR: 0.10, AGI: 0.02 },
   };
 
-  function computeStatDeltas(logEntry) {
+  /* ── Rotating 6-hour activity bonus ─────────────
+     A randomly-picked activity or exercise gets +25% stat
+     gain for 6 hours. One bonus is always active; it auto-rolls
+     to a new one when the window expires.
+  ─────────────────────────────────────────────── */
+
+  const BONUS_WINDOW_MS = 6 * 60 * 60 * 1000;
+  const BONUS_MULTIPLIER = 1.25;
+
+  const BONUS_POOL = [
+    { itemId: 'act_jog',     kind: 'activity', label: 'Jogging',     icon: '🏃' },
+    { itemId: 'act_swim',    kind: 'activity', label: 'Swimming',    icon: '🏊' },
+    { itemId: 'act_bball',   kind: 'activity', label: 'Basketball',  icon: '🏀' },
+    { itemId: 'act_walkdog', kind: 'activity', label: 'Dog Walking', icon: '🐕' },
+    { itemId: 'act_cycle',   kind: 'activity', label: 'Cycling',     icon: '🚴' },
+    { itemId: 'act_hike',    kind: 'activity', label: 'Hiking',      icon: '🥾' },
+    { itemId: 'act_yoga',    kind: 'activity', label: 'Yoga',        icon: '🧘' },
+    { itemId: 'ex_pushup',   kind: 'exercise', label: 'Push-ups',    icon: '💪' },
+    { itemId: 'ex_situp',    kind: 'exercise', label: 'Sit-ups',     icon: '🔥' },
+    { itemId: 'ex_pullup',   kind: 'exercise', label: 'Pull-ups',    icon: '🏋️' },
+    { itemId: 'ex_squat',    kind: 'exercise', label: 'Squats',      icon: '🦵' },
+    { itemId: 'ex_idl',      kind: 'exercise', label: 'Leg Raises',  icon: '🦵' },
+    { itemId: 'ex_dumbbell', kind: 'exercise', label: 'Dumbbells',   icon: '🏋️' },
+    { itemId: 'ex_lunge',    kind: 'exercise', label: 'Lunges',      icon: '🦵' },
+    { itemId: 'ex_dip',      kind: 'exercise', label: 'Dips',        icon: '💪' },
+    { itemId: 'ex_burpee',   kind: 'exercise', label: 'Burpees',     icon: '🔥' },
+    { itemId: 'ex_plank',    kind: 'exercise', label: 'Plank',       icon: '⏱' },
+    { itemId: 'ex_bench',    kind: 'exercise', label: 'Bench Press', icon: '🏋️' },
+    { itemId: 'ex_row',      kind: 'exercise', label: 'Bent Row',    icon: '🏋️' },
+  ];
+
+  function rollBonus(now) {
+    const pick = BONUS_POOL[Math.floor(Math.random() * BONUS_POOL.length)];
+    const bonus = {
+      itemId:      pick.itemId,
+      kind:        pick.kind,
+      label:       pick.label,
+      icon:        pick.icon,
+      multiplier:  BONUS_MULTIPLIER,
+      windowStart: now,
+      windowEnd:   now + BONUS_WINDOW_MS,
+    };
+    Store.setBonus(bonus);
+    return bonus;
+  }
+
+  function getActiveBonus(now) {
+    const current = Store.getBonus();
+    if (current && current.windowEnd > now) return current;
+    return rollBonus(now);
+  }
+
+  function computeStatDeltas(logEntry, bonus) {
     const delta = { STR_acc: 0, AGI_acc: 0, VIT_acc: 0, DIS_acc: 0 };
+    let bonusApplied = false;
 
     for (const a of logEntry.activities) {
       const gains = ACTIVITY_STAT_PER_MIN[a.activityId]
         || { VIT: 0.2, STR: 0.1 };
+      const isBonus = bonus && bonus.kind === 'activity' && bonus.itemId === a.activityId;
+      const mult    = isBonus ? bonus.multiplier : 1;
+      if (isBonus) bonusApplied = true;
       for (const [stat, rate] of Object.entries(gains)) {
-        delta[stat + '_acc'] = (delta[stat + '_acc'] || 0) + rate * a.durationMinutes;
+        delta[stat + '_acc'] = (delta[stat + '_acc'] || 0) + rate * a.durationMinutes * mult;
       }
     }
 
     for (const ex of logEntry.exercises) {
       const gains = EXERCISE_STAT_PER_REP[ex.exerciseId] || { STR: 0.05 };
+      const isBonus = bonus && bonus.kind === 'exercise' && bonus.itemId === ex.exerciseId;
+      const mult    = isBonus ? bonus.multiplier : 1;
+      if (isBonus) bonusApplied = true;
       for (const [stat, rate] of Object.entries(gains)) {
-        delta[stat + '_acc'] = (delta[stat + '_acc'] || 0) + rate * ex.totalReps;
+        delta[stat + '_acc'] = (delta[stat + '_acc'] || 0) + rate * ex.totalReps * mult;
       }
     }
 
@@ -155,7 +295,7 @@ const Engine = (() => {
       delta.VIT_acc += logEntry.meals.length * 0.5;
     }
 
-    return delta;
+    return { delta, bonusApplied };
   }
 
   function applyStatDeltas(player, delta, today) {
@@ -442,89 +582,91 @@ const Engine = (() => {
   }
 
   /* ── Food quality / HP ───────────────────────
-     If full macros are present, score by macro balance.
-     Otherwise fall back to the legacy calorie/protein ratio.
+     Every logged meal heals — junk a little, balanced a lot.
+     Per-meal heal: floor(cal/100) + floor(protein/3), gated by
+     "still under today's calorie goal." Plus three one-shot daily
+     bonuses for crossing 800 cal, 1600 cal, and the protein goal.
+     classifyMeal is purely cosmetic feedback for the picker.
   ─────────────────────────────────────────────── */
 
-  function computeMealHP(meal) {
+  function computeMealHeal(meal, todayCaloriesBefore, dailyCalGoal) {
+    if (todayCaloriesBefore >= dailyCalGoal) return 0;
+    return Math.floor((meal.calories || 0) / 100)
+         + Math.floor((meal.proteinG || 0) /   3);
+  }
+
+  function classifyMeal(meal) {
     const cal  = meal.calories || 0;
     const prot = meal.proteinG || 0;
-    const carbs = meal.carbsG;
-    const fats  = meal.fatsG;
-    const hasFullMacros = carbs !== undefined && carbs !== null &&
-                          fats  !== undefined && fats  !== null &&
-                          (carbs > 0 || fats > 0 || prot > 0);
+    if (cal <= 0 && prot <= 0) return { label: 'Empty',     emoji: '⬜' };
+    const protPer100 = cal > 0 ? (prot / cal) * 100 : 0;
+    if (protPer100 >= 8) return { label: 'Excellent', emoji: '✅' };
+    if (protPer100 >= 5) return { label: 'Good',      emoji: '🟢' };
+    if (protPer100 >= 2) return { label: 'Neutral',   emoji: '⬜' };
+    return                { label: 'Junk',      emoji: '🟡' };
+  }
 
-    if (hasFullMacros && cal > 0) {
-      // Macro-aware scoring
-      const protCals  = prot  * 4;
-      const carbCals  = (carbs || 0) * 4;
-      const fatCals   = (fats  || 0) * 9;
-      const macroCals = protCals + carbCals + fatCals;
-      // Reject meals with no macros at all — treat as junk
-      if (macroCals < cal * 0.5) return { hpDelta: -12, label: 'Junk', emoji: '🔴' };
-
-      const protPct = protCals / Math.max(1, macroCals);
-      const fatPct  = fatCals  / Math.max(1, macroCals);
-
-      // Excellent: ≥25% protein, fat ≤40%
-      if (protPct >= 0.25 && fatPct <= 0.40) return { hpDelta: 15, label: 'Excellent', emoji: '✅' };
-      // Good: ≥18% protein, fat ≤50%
-      if (protPct >= 0.18 && fatPct <= 0.50) return { hpDelta: 8, label: 'Good', emoji: '🟢' };
-      // Neutral: ≥10% protein, fat ≤60%
-      if (protPct >= 0.10 && fatPct <= 0.60) return { hpDelta: 2, label: 'Neutral', emoji: '⬜' };
-      // Poor: any protein at all
-      if (protPct > 0) return { hpDelta: -5, label: 'Poor', emoji: '🟡' };
-      return { hpDelta: -12, label: 'Junk', emoji: '🔴' };
+  function resetDailyHealsIfNewDay(player, today) {
+    if (!player.dailyHealsAwarded || player.dailyHealsAwarded.date !== today) {
+      player.dailyHealsAwarded = { date: today, cal800: false, cal1600: false, protein: false };
     }
-
-    // Legacy fallback (calories + protein only)
-    if (!prot) return { hpDelta: -12, label: 'Junk', emoji: '🔴' };
-    const ratio = cal / Math.max(1, prot);
-    if (ratio <= 8)  return { hpDelta: 15, label: 'Excellent', emoji: '✅' };
-    if (ratio <= 15) return { hpDelta: 8,  label: 'Good',      emoji: '🟢' };
-    if (ratio <= 25) return { hpDelta: 2,  label: 'Neutral',   emoji: '⬜' };
-    if (ratio <= 40) return { hpDelta: -5, label: 'Poor',      emoji: '🟡' };
-    return            { hpDelta: -12, label: 'Junk',      emoji: '🔴' };
   }
 
   function computeHPChanges(entry, player, today, fullLog) {
+    resetDailyHealsIfNewDay(player, today);
+
+    const dailyCalGoal = player.goals.dailyCalories;
+    const proteinGoal  = player.goals.dailyProteinG;
+
+    // Pre-entry day totals (fullLog already includes the just-appended entry, so exclude it).
+    const priorToday = fullLog.filter(e => e.date === today && e.id !== entry.id);
+    let runningCal     = priorToday.reduce((sum, e) => sum + e.meals.reduce((s, m) => s + (m.calories || 0), 0), 0);
+    let runningProtein = priorToday.reduce((sum, e) => sum + e.meals.reduce((s, m) => s + (m.proteinG || 0), 0), 0);
+
     const mealQualities = [];
-    let hpDelta = 0;
+    let mealHealTotal = 0;
+    let cal800Bonus   = 0;
+    let cal1600Bonus  = 0;
+    let proteinBonus  = 0;
 
     for (const meal of entry.meals) {
-      const q = computeMealHP(meal);
-      const mitigated = applyDISMitigation(q.hpDelta, player.stats.DIS);
-      player.hp += mitigated;
-      hpDelta   += mitigated;
-      mealQualities.push({ name: meal.name || 'Meal', hpDelta: mitigated, label: q.label, emoji: q.emoji });
-    }
+      const heal    = computeMealHeal(meal, runningCal, dailyCalGoal);
+      const quality = classifyMeal(meal);
+      if (heal > 0) {
+        player.hp     += heal;
+        mealHealTotal += heal;
+      }
+      mealQualities.push({ name: meal.name || 'Meal', hp: heal, label: quality.label, emoji: quality.emoji });
 
-    const todayEntries   = fullLog.filter(e => e.date === today);
-    const todayCalories  = todayEntries.reduce((sum, e) => sum + e.meals.reduce((s, m) => s + (m.calories  || 0), 0), 0);
-    const todayProtein   = todayEntries.reduce((sum, e) => sum + e.meals.reduce((s, m) => s + (m.proteinG  || 0), 0), 0);
+      runningCal     += meal.calories || 0;
+      runningProtein += meal.proteinG || 0;
 
-    let overagePenalty = 0;
-    if (todayCalories > player.goals.dailyCalories && player.hpDmgDealt !== today) {
-      const overage = todayCalories - player.goals.dailyCalories;
-      const rawPenalty = Math.floor((overage / player.goals.dailyCalories) * 30);
-      overagePenalty = Math.abs(applyDISMitigation(-rawPenalty, player.stats.DIS));
-      if (overagePenalty > 0) {
-        player.hp        -= overagePenalty;
-        hpDelta          -= overagePenalty;
-        player.hpDmgDealt = today;
+      if (!player.dailyHealsAwarded.cal800 && runningCal >= CAL_HEAL_BONUS_1) {
+        cal800Bonus = CAL_HEAL_BONUS_HP;
+        player.hp  += CAL_HEAL_BONUS_HP;
+        player.dailyHealsAwarded.cal800 = true;
+      }
+      if (!player.dailyHealsAwarded.cal1600 && runningCal >= CAL_HEAL_BONUS_2) {
+        cal1600Bonus = CAL_HEAL_BONUS_HP;
+        player.hp   += CAL_HEAL_BONUS_HP;
+        player.dailyHealsAwarded.cal1600 = true;
+      }
+      if (!player.dailyHealsAwarded.protein && runningProtein >= proteinGoal) {
+        proteinBonus = PROTEIN_HEAL_BONUS;
+        player.hp   += PROTEIN_HEAL_BONUS;
+        player.dailyHealsAwarded.protein = true;
+        player.proteinGoalHits = (player.proteinGoalHits || 0) + 1;
       }
     }
 
-    let regenBonus = 0;
-    if (todayProtein >= player.goals.dailyProteinG && player.hpRegenCredited !== today) {
-      regenBonus = 15 + Math.floor(player.stats.DIS * 0.5);
-      player.hp              = Math.min(player.hpMax, player.hp + regenBonus);
-      hpDelta               += regenBonus;
-      player.hpRegenCredited = today;
-    }
+    player.hp = Math.min(player.hpMax, player.hp);
+    const hpDelta = mealHealTotal + cal800Bonus + cal1600Bonus + proteinBonus;
 
-    return { hpDelta, mealQualities, overagePenalty, regenBonus };
+    return {
+      hpDelta,
+      mealQualities,
+      hpBreakdown: { mealHeal: mealHealTotal, cal800Bonus, cal1600Bonus, proteinBonus },
+    };
   }
 
   function triggerKnockOut(player) {
@@ -537,6 +679,9 @@ const Engine = (() => {
     player.maxEnergy  = 30 + (player.stats.AGI * 5);
     player.energy     = Math.min(player.energy || 0, player.maxEnergy);
     player.knockedOut = true;
+    // Reset survival anchors so post-KO HP doesn't immediately re-tick.
+    player.lastHpTickAt        = Date.now();
+    player.lastMonsterAttackAt = Date.now();
     Quests.resetDailyWeeklyProgress();
   }
 
@@ -553,10 +698,6 @@ const Engine = (() => {
     applyStatDecay(player, today);
 
     updateEnergyRegen(player);
-
-    if (player.knockedOut && player.hp >= player.hpMax * 0.5) {
-      player.knockedOut = false;
-    }
 
     const todayLogWithNew = [...todayLog, logEntry];
 
@@ -598,7 +739,8 @@ const Engine = (() => {
     player.totalExercisesLogged  += logEntry.exercises.length;
     player.totalMealsLogged      += logEntry.meals.length;
 
-    const delta = computeStatDeltas(logEntry);
+    const activeBonus = getActiveBonus(Date.now());
+    const { delta, bonusApplied } = computeStatDeltas(logEntry, activeBonus);
 
     const { disAcc } = computeDIScredits(player, todayLogWithNew, today);
     delta.DIS_acc = (delta.DIS_acc || 0) + disAcc;
@@ -652,6 +794,11 @@ const Engine = (() => {
     hpPlayer.hpMax = 100 + (hpPlayer.stats.VIT * 15);
     const hpResult = computeHPChanges(logEntry, hpPlayer, today, Store.getLog());
 
+    // A meal heal that pushes you above 0 HP revives a knocked-out player.
+    if (hpPlayer.knockedOut && hpPlayer.hp > 0) {
+      hpPlayer.knockedOut = false;
+    }
+
     let knockedOut = false;
     if (hpPlayer.hp <= 0) {
       triggerKnockOut(hpPlayer);
@@ -675,11 +822,12 @@ const Engine = (() => {
       defeatedMonster: null,
       hpDelta:        hpResult.hpDelta,
       mealQualities:  hpResult.mealQualities,
-      overagePenalty: hpResult.overagePenalty,
-      regenBonus:     hpResult.regenBonus,
+      hpBreakdown:    hpResult.hpBreakdown,
       knockedOut,
       hpAfter:        hpPlayer.hp,
       hpMax:          hpPlayer.hpMax,
+      bonusApplied,
+      bonus:          bonusApplied ? activeBonus : null,
     };
   }
 
@@ -712,16 +860,28 @@ const Engine = (() => {
     CYCLE_DAYS,
     DECAY_GRACE_DAYS,
     DECAY_RATE_PER_DAY,
+    BONUS_POOL,
+    BONUS_WINDOW_MS,
+    BONUS_MULTIPLIER,
+    HP_DECAY_PER_HOUR,
+    MONSTER_ATTACK_INTERVAL_MS,
+    MONSTER_ATTACK_DAMAGE,
     xpToNextLevel,
     getDerivedStats,
     processLogEntry,
-    computeMealHP,
+    computeMealHeal,
+    classifyMeal,
     computeAttack,
     updateEnergyRegen,
+    applyHpDecay,
+    applyMonsterAttacks,
+    applySurvivalTicks,
     applyDISMitigation,
     rolloverCycleIfNeeded,
     applyStatDecay,
     daysUntilCycleEnd,
     statDecayStatus,
+    getActiveBonus,
+    rollBonus,
   };
 })();
