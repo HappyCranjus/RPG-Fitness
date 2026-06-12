@@ -323,6 +323,7 @@ function renderMacroCard(player, totals) {
 function quickAddWater(oz) {
   if (!Number.isFinite(oz) || oz <= 0) return;
   Store.addWaterOz(oz);
+  _applyWaterEnergy(oz);
   Router.refresh();
 }
 
@@ -335,7 +336,22 @@ function promptCustomWater() {
     return;
   }
   Store.addWaterOz(n);
+  _applyWaterEnergy(n);
   Router.refresh();
+}
+
+function _applyWaterEnergy(oz) {
+  const gain = Engine.computeWaterEnergyHeal(oz);
+  if (gain <= 0) return;
+  const player = Store.getPlayer();
+  Engine.updateEnergyRegen(player);
+  const before = player.energy || 0;
+  player.energy = Math.min(player.maxEnergy || 35, before + gain);
+  const actual = player.energy - before;
+  if (actual > 0) {
+    Store.setPlayer(player);
+    Toast.show(`💧 +${actual} Energy`, 'success');
+  }
 }
 
 /* ── Weigh-in widget ───────────────────────────── */
@@ -406,13 +422,12 @@ function renderSleepWidget() {
   const s = Store.getSleepToday();
   if (s) {
     const stars = '★'.repeat(s.quality) + '☆'.repeat(5 - s.quality);
-    const credit = (s.hours >= 7 && s.quality >= 3) ? '✓' : '<span style="color:var(--accent-red);">(no credit)</span>';
     return `
       <div class="daily-widget sleep-widget">
         <div class="daily-widget-row">
           <span class="daily-widget-icon">🌙</span>
           <div class="daily-widget-main">
-            <div class="daily-widget-value">${s.hours}h ${credit}</div>
+            <div class="daily-widget-value">${s.hours}h ✓</div>
             <div class="daily-widget-sub" style="color:var(--accent-gold);">${stars}</div>
           </div>
           <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="promptSleep()">Re-log</button>
@@ -426,7 +441,7 @@ function renderSleepWidget() {
         <span class="daily-widget-icon">🌙</span>
         <div class="daily-widget-main">
           <div class="daily-widget-value">Sleep not logged</div>
-          <div class="daily-widget-sub" style="color:var(--text-muted);">Credit: ≥7h & ≥3★</div>
+          <div class="daily-widget-sub" style="color:var(--text-muted);">Log any sleep for DIS credit</div>
         </div>
         <button class="btn btn-primary btn-sm" style="width:auto;" onclick="promptSleep()">Log</button>
       </div>
@@ -451,11 +466,7 @@ function promptSleep() {
     return;
   }
   Store.setSleepToday(hours, quality);
-  if (hours >= 7 && quality >= 3) {
-    Toast.show('Sleep logged — DIS credit earned.', 'success');
-  } else {
-    Toast.show('Sleep logged.', 'info');
-  }
+  Toast.show('Sleep logged — DIS credit earned.', 'success');
   Router.refresh();
 }
 

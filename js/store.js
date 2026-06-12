@@ -72,6 +72,7 @@ const Store = (() => {
       lastMonsterAttackAt: now,
       lastStatDecayTickAt: now,
       dailyHealsAwarded:   { date: today, cal800: false, cal1600: false, protein: false },
+      dailyStatBonusAwarded: { date: today, protein: false, fiberWater: false, calZone: false },
       energy:          35,
       maxEnergy:       35,
       lastEnergyUpdate: null,
@@ -109,6 +110,9 @@ const Store = (() => {
     if (p.lastMonsterAttackAt === undefined) p.lastMonsterAttackAt = now;
     if (!p.dailyHealsAwarded || p.dailyHealsAwarded.date === undefined) {
       p.dailyHealsAwarded = { date: today, cal800: false, cal1600: false, protein: false };
+    }
+    if (!p.dailyStatBonusAwarded || p.dailyStatBonusAwarded.date === undefined) {
+      p.dailyStatBonusAwarded = { date: today, protein: false, fiberWater: false, calZone: false };
     }
 
     // ── Cohesion-pass migration ────────────────

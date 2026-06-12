@@ -44,7 +44,7 @@ const Engine = (() => {
 
   // Stat decay (acc per day, before tier multiplier).
   // Tier multiplier comes from today's discipline behavior.
-  const STAT_DECAY_PER_DAY = { STR: 5, AGI: 4, VIT: 3 };
+  const STAT_DECAY_PER_DAY = { STR: 3, AGI: 2, VIT: 3 };
   const STAT_DECAY_TICK_MS = 30 * 60 * 1000;  // 30 minutes
 
   // HP survival loop
@@ -57,6 +57,11 @@ const Engine = (() => {
   const CAL_HEAL_BONUS_2   = 1600;
   const CAL_HEAL_BONUS_HP  = 10;
   const PROTEIN_HEAL_BONUS = 30;
+
+  // Daily stat acc bonuses for hitting nutrition goals (once per day each).
+  const PROTEIN_STR_BONUS     = 3;  // STR acc when daily protein goal is hit
+  const FIBER_WATER_AGI_BONUS = 3;  // AGI acc when fiber+water goals both hit
+  const CAL_ZONE_VIT_BONUS    = 3;  // VIT acc when calories land in 85–115% of goal
 
   // Added-sugar penalty: 2 HP per gram over the daily limit.
   const SUGAR_DMG_PER_GRAM = 2;
@@ -79,13 +84,19 @@ const Engine = (() => {
 
   /* ── Energy regen (lazy, call before any energy read) ── */
 
+  function sleepEnergyMultiplier(sleepRow) {
+    if (!sleepRow || sleepRow.hours <= 0) return 1.0;
+    return Math.max(0.5, Math.min(1.3, 1.0 + (sleepRow.hours - 7) * 0.1));
+  }
+
   function updateEnergyRegen(player) {
     if (!player.lastEnergyUpdate) {
       player.lastEnergyUpdate = new Date().toISOString();
       return;
     }
     const hoursElapsed = (Date.now() - new Date(player.lastEnergyUpdate).getTime()) / 3600000;
-    const regen = hoursElapsed * (3 + player.stats.AGI * 0.5);
+    const sleepRow = (typeof Store !== 'undefined' && Store.getSleepToday) ? Store.getSleepToday() : null;
+    const regen = hoursElapsed * (3 + player.stats.AGI * 0.5) * sleepEnergyMultiplier(sleepRow);
     player.energy = Math.min(player.maxEnergy || 35, (player.energy || 0) + regen);
     player.lastEnergyUpdate = new Date().toISOString();
   }
@@ -210,14 +221,26 @@ const Engine = (() => {
 
   const ACTIVITY_TYPE_MOD  = { cardio: 1.0, sports: 1.1, misc: 0.9 };
   const EXERCISE_XP_PER_REP = {
-    ex_pushup:   0.4, ex_situp:  0.3, ex_pullup:  0.8,
-    ex_squat:    0.4, ex_idl:    0.5, ex_dumbbell: 0.5,
-    ex_lunge:    0.4, ex_dip:    0.7, ex_burpee:  1.2,
-    ex_plank:    0.1, ex_bench:  0.7, ex_row:     0.6,
+    ex_pushup:        0.4, ex_situp:        0.3, ex_pullup:    0.8,
+    ex_squat:         0.4, ex_idl:          0.5, ex_dumbbell:  0.5,
+    ex_lunge:         0.4, ex_dip:          0.7, ex_burpee:    1.2,
+    ex_plank:         0.1, ex_bench:        0.7, ex_row:       0.6,
+    ex_mil_press:     0.8,
+    ex_upright_row:   0.6,
+    ex_bicep_curl:    0.5,
+    ex_squat_w:       1.0,
+    ex_idl_w:         0.7,
+    ex_russian_twist: 0.3,
+    ex_flutter_kick:  0.3,
   };
+
+  const MEAL_XP_DAILY_CAP     = 40;
+  const EXERCISE_XP_DAILY_CAP = 60;
 
   function computeXP(logEntry, streakDays) {
     let total = 0;
+    let mealXP = 0;
+    let exerciseXP = 0;
     const breakdown = [];
 
     for (const a of logEntry.activities) {
@@ -230,31 +253,33 @@ const Engine = (() => {
     for (const ex of logEntry.exercises) {
       const perRep = EXERCISE_XP_PER_REP[ex.exerciseId] || 0.4;
       const xp = Math.floor(ex.totalReps * perRep);
+      exerciseXP += xp;
       total += xp;
       breakdown.push({ name: ex.name, xp });
     }
 
     for (const m of logEntry.meals) {
       const xp = 15 + Math.floor((m.proteinG || 0) * 0.2);
+      mealXP += xp;
       total += xp;
     }
 
     const streakBonus = Math.min(streakDays * 5, 50);
     total += streakBonus;
 
-    return { total, breakdown, streakBonus };
+    return { total, breakdown, streakBonus, mealXP, exerciseXP };
   }
 
   /* ── Stat accumulator computation ──────────── */
 
   const ACTIVITY_STAT_PER_MIN = {
-    act_jog:     { STR: 0.1, VIT: 0.4, AGI: 0.1 },
-    act_swim:    { STR: 0.2, VIT: 0.3, AGI: 0.3 },
-    act_bball:   { STR: 0.1, VIT: 0.2, AGI: 0.5 },
-    act_walkdog: { VIT: 0.2 },
-    act_cycle:   { STR: 0.1, VIT: 0.4, AGI: 0.1 },
-    act_hike:    { STR: 0.1, VIT: 0.5 },
-    act_yoga:    { AGI: 0.4, VIT: 0.2 },
+    act_jog:     { STR: 0.1, VIT: 0.25, AGI: 0.15 },
+    act_swim:    { STR: 0.2, VIT: 0.20, AGI: 0.3  },
+    act_bball:   { STR: 0.1, VIT: 0.2,  AGI: 0.5  },
+    act_walkdog: { VIT: 0.15 },
+    act_cycle:   { STR: 0.1, VIT: 0.25, AGI: 0.15 },
+    act_hike:    { STR: 0.1, VIT: 0.30 },
+    act_yoga:    { AGI: 0.4, VIT: 0.15 },
   };
 
   const EXERCISE_STAT_PER_REP = {
@@ -268,8 +293,15 @@ const Engine = (() => {
     ex_dip:      { STR: 0.10 },
     ex_burpee:   { STR: 0.05, AGI: 0.05, VIT: 0.04 },
     ex_plank:    { STR: 0.02, VIT: 0.01 },
-    ex_bench:    { STR: 0.12 },
-    ex_row:      { STR: 0.10, AGI: 0.02 },
+    ex_bench:         { STR: 0.12 },
+    ex_row:           { STR: 0.10, AGI: 0.02 },
+    ex_mil_press:     { STR: 0.11, AGI: 0.02 },
+    ex_upright_row:   { STR: 0.09 },
+    ex_bicep_curl:    { STR: 0.09 },
+    ex_squat_w:       { STR: 0.14, VIT: 0.02 },
+    ex_idl_w:         { STR: 0.10, VIT: 0.01 },
+    ex_russian_twist: { STR: 0.04, AGI: 0.03 },
+    ex_flutter_kick:  { STR: 0.03, VIT: 0.02 },
   };
 
   /* ── Rotating 6-hour activity bonus ─────────── */
@@ -295,8 +327,15 @@ const Engine = (() => {
     { itemId: 'ex_dip',      kind: 'exercise', label: 'Dips',        icon: '💪' },
     { itemId: 'ex_burpee',   kind: 'exercise', label: 'Burpees',     icon: '🔥' },
     { itemId: 'ex_plank',    kind: 'exercise', label: 'Plank',       icon: '⏱' },
-    { itemId: 'ex_bench',    kind: 'exercise', label: 'Bench Press', icon: '🏋️' },
-    { itemId: 'ex_row',      kind: 'exercise', label: 'Bent Row',    icon: '🏋️' },
+    { itemId: 'ex_bench',         kind: 'exercise', label: 'Bench Press',    icon: '🏋️' },
+    { itemId: 'ex_row',           kind: 'exercise', label: 'Bent Row',        icon: '🏋️' },
+    { itemId: 'ex_mil_press',     kind: 'exercise', label: 'Military Press',  icon: '🏋️' },
+    { itemId: 'ex_upright_row',   kind: 'exercise', label: 'Upright Row',     icon: '🏋️' },
+    { itemId: 'ex_bicep_curl',    kind: 'exercise', label: 'Bicep Curl',      icon: '💪' },
+    { itemId: 'ex_squat_w',       kind: 'exercise', label: 'Weighted Squat',  icon: '🦵' },
+    { itemId: 'ex_idl_w',         kind: 'exercise', label: 'Weighted IDL',    icon: '🦵' },
+    { itemId: 'ex_russian_twist', kind: 'exercise', label: 'Russian Twists',  icon: '🔥' },
+    { itemId: 'ex_flutter_kick',  kind: 'exercise', label: 'Flutter Kicks',   icon: '🔥' },
   ];
 
   function rollBonus(now) {
@@ -443,10 +482,10 @@ const Engine = (() => {
       }
     }
 
-    // Sleep credit: today's row, >=7 hours, quality >=3.
+    // Sleep credit: any sleep logged today.
     if (typeof Store !== 'undefined' && Store.getSleepToday) {
       const s = Store.getSleepToday();
-      if (s && s.hours >= 7 && s.quality >= 3) {
+      if (s && s.hours > 0) {
         credits.sleep = true;
       }
     }
@@ -709,6 +748,10 @@ const Engine = (() => {
          + Math.floor((meal.proteinG || 0) /   3);
   }
 
+  function computeWaterEnergyHeal(ozAdded) {
+    return Math.floor(ozAdded * 0.5);
+  }
+
   // Only the portion of THIS meal that crosses the daily sugar limit.
   function sugarOverageForMeal(meal, sugarBefore, sugarMax) {
     const gThis = meal.addedSugarG || 0;
@@ -732,6 +775,46 @@ const Engine = (() => {
     if (!player.dailyHealsAwarded || player.dailyHealsAwarded.date !== today) {
       player.dailyHealsAwarded = { date: today, cal800: false, cal1600: false, protein: false };
     }
+  }
+
+  function resetDailyStatBonusIfNewDay(player, today) {
+    if (!player.dailyStatBonusAwarded || player.dailyStatBonusAwarded.date !== today) {
+      player.dailyStatBonusAwarded = { date: today, protein: false, fiberWater: false, calZone: false };
+    }
+  }
+
+  function applyNutritionStatBonuses(player, today, todayLogWithNew) {
+    resetDailyStatBonusIfNewDay(player, today);
+
+    const calGoal   = player.goals.dailyCalories || 0;
+    const protGoal  = player.goals.dailyProteinG || 0;
+    const fiberGoal = player.goals.dailyFiberG   || 30;
+    const waterGoal = player.goals.dailyWaterOz  || 64;
+
+    const totalCal     = todayLogWithNew.reduce((s, e) => s + e.meals.reduce((ms, m) => ms + (m.calories || 0), 0), 0);
+    const totalProtein = todayLogWithNew.reduce((s, e) => s + e.meals.reduce((ms, m) => ms + (m.proteinG || 0), 0), 0);
+    const totalFiber   = todayLogWithNew.reduce((s, e) => s + e.meals.reduce((ms, m) => ms + (m.fiberG   || 0), 0), 0);
+    const totalWaterOz = (typeof Store !== 'undefined') ? Store.getWaterToday() : 0;
+
+    const delta = { STR_acc: 0, AGI_acc: 0, VIT_acc: 0 };
+
+    if (!player.dailyStatBonusAwarded.protein && protGoal > 0 && totalProtein >= protGoal) {
+      delta.STR_acc += PROTEIN_STR_BONUS;
+      player.dailyStatBonusAwarded.protein = true;
+    }
+    if (!player.dailyStatBonusAwarded.fiberWater && totalFiber >= fiberGoal && totalWaterOz >= waterGoal) {
+      delta.AGI_acc += FIBER_WATER_AGI_BONUS;
+      player.dailyStatBonusAwarded.fiberWater = true;
+    }
+    if (!player.dailyStatBonusAwarded.calZone && calGoal > 0) {
+      const ratio = totalCal / calGoal;
+      if (ratio >= 0.85 && ratio <= 1.15) {
+        delta.VIT_acc += CAL_ZONE_VIT_BONUS;
+        player.dailyStatBonusAwarded.calZone = true;
+      }
+    }
+
+    return delta;
   }
 
   function computeHPChanges(entry, player, today, fullLog) {
@@ -842,6 +925,15 @@ const Engine = (() => {
     updateStreak(player, today);
     const xpResult = computeXP(logEntry, player.streakDays);
 
+    // Daily cap on meal and exercise XP — activities, streaks, and bonuses remain uncapped
+    const alreadyMealXP     = todayLog.reduce((s, e) => s + (e._mealXP     || 0), 0);
+    const alreadyExerciseXP = todayLog.reduce((s, e) => s + (e._exerciseXP || 0), 0);
+    const mealXPCapped     = Math.max(0, Math.min(xpResult.mealXP,     MEAL_XP_DAILY_CAP     - alreadyMealXP));
+    const exerciseXPCapped = Math.max(0, Math.min(xpResult.exerciseXP, EXERCISE_XP_DAILY_CAP - alreadyExerciseXP));
+    xpResult.total -= (xpResult.mealXP - mealXPCapped) + (xpResult.exerciseXP - exerciseXPCapped);
+    logEntry._mealXP     = mealXPCapped;
+    logEntry._exerciseXP = exerciseXPCapped;
+
     const mainMealTypes = new Set(todayLogWithNew.flatMap(e =>
       e.meals.map(m => m.mealType).filter(t => ['breakfast','lunch','dinner'].includes(t))));
     let fullDayBonus = 0;
@@ -882,6 +974,12 @@ const Engine = (() => {
 
     const statsGained = applyStatDeltas(player, delta, today);
 
+    const nutritionDelta = applyNutritionStatBonuses(player, today, todayLogWithNew);
+    const nutritionStatsGained = applyStatDeltas(player, nutritionDelta, today);
+    for (const k of Object.keys(nutritionStatsGained)) {
+      statsGained[k] = (statsGained[k] || 0) + nutritionStatsGained[k];
+    }
+
     if (statsGained.VIT) {
       player.hpMax = 100 + (player.stats.VIT * 15);
     }
@@ -896,9 +994,9 @@ const Engine = (() => {
     logEntry.routineBonus = routineBonus;
     logEntry.statsGained = statsGained;
     logEntry.statDeltas  = {
-      STR: delta.STR_acc || 0,
-      AGI: delta.AGI_acc || 0,
-      VIT: delta.VIT_acc || 0,
+      STR: (delta.STR_acc || 0) + (nutritionDelta.STR_acc || 0),
+      AGI: (delta.AGI_acc || 0) + (nutritionDelta.AGI_acc || 0),
+      VIT: (delta.VIT_acc || 0) + (nutritionDelta.VIT_acc || 0),
     };
 
     Store.appendLog(logEntry);
@@ -1039,6 +1137,7 @@ const Engine = (() => {
     // main flows
     processLogEntry,
     computeMealHeal,
+    computeWaterEnergyHeal,
     sugarOverageForMeal,
     classifyMeal,
     computeAttack,

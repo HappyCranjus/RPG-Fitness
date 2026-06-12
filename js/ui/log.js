@@ -28,8 +28,15 @@ const EXERCISE_DEFS = [
   { id: 'ex_idl',      name: 'Inverted Leg Raises',icon: '🦵', type: 'bodyweight' },
   { id: 'ex_dumbbell', name: 'Dumbbell Exercise',  icon: '🏋️', type: 'weighted' },
   { id: 'ex_bench',    name: 'Bench Press',        icon: '🏋️', type: 'weighted' },
-  { id: 'ex_row',      name: 'Bent-over Row',      icon: '🏋️', type: 'weighted' },
-  { id: 'ex_custom',   name: 'Custom Exercise',    icon: '⚡', type: 'bodyweight' },
+  { id: 'ex_row',           name: 'Bent-over Row',           icon: '🏋️', type: 'weighted'   },
+  { id: 'ex_mil_press',     name: 'Barbell: Military Press', icon: '🏋️', type: 'weighted'   },
+  { id: 'ex_upright_row',   name: 'Barbell: Upright Row',    icon: '🏋️', type: 'weighted'   },
+  { id: 'ex_bicep_curl',    name: 'Barbell: Bicep Curl',     icon: '💪', type: 'weighted'   },
+  { id: 'ex_squat_w',       name: 'Weighted Squat',          icon: '🦵', type: 'weighted'   },
+  { id: 'ex_idl_w',         name: 'Weighted IDL',            icon: '🦵', type: 'weighted'   },
+  { id: 'ex_russian_twist', name: 'Russian Twists',          icon: '🔥', type: 'bodyweight' },
+  { id: 'ex_flutter_kick',  name: 'Flutter Kicks',           icon: '🔥', type: 'bodyweight' },
+  { id: 'ex_custom',        name: 'Custom Exercise',         icon: '⚡', type: 'bodyweight' },
 ];
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -411,7 +418,7 @@ function renderExerciseRow(idx) {
       </div>
       <button class="item-delete" onclick="deleteExercise(${idx})">✕</button>
     </div>
-    <div style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">Total: ${entry.totalReps} reps</div>
+    <div id="ex-total-${idx}" style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">Total: ${entry.totalReps} reps</div>
   `;
 
   document.getElementById('ex-type-' + idx).onchange = e => {
@@ -424,18 +431,25 @@ function renderExerciseRow(idx) {
     updatePreview();
   };
 
-  const updateTotalReps = debounce(() => {
+  const updateTotalReps = () => {
     const sets = Math.max(1, parseInt(document.getElementById('ex-sets-' + idx)?.value) || 1);
     const reps = Math.max(1, parseInt(document.getElementById('ex-reps-' + idx)?.value) || 1);
     logState.exercises[idx].sets = sets;
     logState.exercises[idx].reps = reps;
     logState.exercises[idx].totalReps = sets * reps;
-    renderExerciseRow(idx);
+    const totalEl = document.getElementById('ex-total-' + idx);
+    if (totalEl) totalEl.textContent = `Total: ${sets * reps} reps`;
     updatePreview();
-  }, 300);
+  };
 
-  document.getElementById('ex-sets-' + idx).oninput = updateTotalReps;
-  document.getElementById('ex-reps-' + idx).oninput = updateTotalReps;
+  const commitExerciseRow = () => { updateTotalReps(); renderExerciseRow(idx); };
+
+  const setsInput = document.getElementById('ex-sets-' + idx);
+  const repsInput = document.getElementById('ex-reps-' + idx);
+  setsInput.oninput = updateTotalReps;
+  repsInput.oninput = updateTotalReps;
+  setsInput.onblur = commitExerciseRow;
+  repsInput.onblur = commitExerciseRow;
 
   if (entry.exerciseId === 'ex_custom') {
     const nameInput = document.getElementById('ex-custom-name-' + idx);
