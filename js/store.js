@@ -39,6 +39,14 @@ const Store = (() => {
         VIT_lastGain: today,
         lastDecayCheck: today,
       },
+      body: {
+        heightIn:      null,
+        weightLbs:     null,
+        age:           null,
+        sex:           'male',
+        activityLevel: 1.375,
+        deficitGoal:   500,
+      },
       goals: {
         dailyCalories: Number(dailyCalories),
         dailyProteinG: Number(dailyProteinG),
@@ -48,6 +56,8 @@ const Store = (() => {
         dailyFiberG:   30,
         dailyWaterOz:  64,
         weightTargetLbs: null,
+        weeklyMuscleTargets: { push: 2, pull: 2, legs: 2, core: 2 },
+        weeklyStretchTarget: 2,
       },
       cycleStart: today,
       cyclePeakLevel: 1,
@@ -153,6 +163,11 @@ const Store = (() => {
       if (p.goals.dailyFiberG  === undefined) p.goals.dailyFiberG  = 30;
       if (p.goals.dailyWaterOz === undefined) p.goals.dailyWaterOz = 64;
       if (p.goals.weightTargetLbs === undefined) p.goals.weightTargetLbs = null;
+      if (!p.goals.weeklyMuscleTargets) p.goals.weeklyMuscleTargets = { push: 2, pull: 2, legs: 2, core: 2 };
+      if (p.goals.weeklyStretchTarget === undefined) p.goals.weeklyStretchTarget = 2;
+    }
+    if (!p.body) {
+      p.body = { heightIn: null, weightLbs: null, age: null, sex: 'male', activityLevel: 1.375, deficitGoal: 500 };
     }
     return p;
   }

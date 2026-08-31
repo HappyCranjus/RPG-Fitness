@@ -12,31 +12,31 @@ const ACTIVITY_DEFS = [
   { id: 'act_sex',     name: 'Sex',                icon: '❤️', calPerMin: 5,  type: 'cardio' },
   { id: 'act_cycle',   name: 'Cycling',            icon: '🚴', calPerMin: 8,  type: 'cardio' },
   { id: 'act_hike',    name: 'Hiking',             icon: '🥾', calPerMin: 6,  type: 'cardio' },
-  { id: 'act_yoga',    name: 'Yoga / Stretching',  icon: '🧘', calPerMin: 3,  type: 'misc' },
+  { id: 'act_yoga',    name: 'Yoga / Stretching',  icon: '🧘', calPerMin: 3,  type: 'misc',  isStretch: true },
   { id: 'act_custom',  name: 'Custom Activity',    icon: '⚡', calPerMin: 6,  type: 'misc' },
 ];
 
 const EXERCISE_DEFS = [
-  { id: 'ex_pushup',   name: 'Push-ups',           icon: '💪', type: 'bodyweight' },
-  { id: 'ex_situp',    name: 'Sit-ups / Crunches', icon: '🔥', type: 'bodyweight' },
-  { id: 'ex_pullup',   name: 'Pull-ups / Chin-ups',icon: '🏋️', type: 'bodyweight' },
-  { id: 'ex_squat',    name: 'Squats',             icon: '🦵', type: 'bodyweight' },
-  { id: 'ex_lunge',    name: 'Lunges',             icon: '🦵', type: 'bodyweight' },
-  { id: 'ex_dip',      name: 'Dips',               icon: '💪', type: 'bodyweight' },
-  { id: 'ex_burpee',   name: 'Burpees',            icon: '🔥', type: 'bodyweight' },
-  { id: 'ex_plank',    name: 'Plank (sec held)',   icon: '⏱', type: 'bodyweight' },
-  { id: 'ex_idl',      name: 'Inverted Leg Raises',icon: '🦵', type: 'bodyweight' },
-  { id: 'ex_dumbbell', name: 'Dumbbell Exercise',  icon: '🏋️', type: 'weighted' },
-  { id: 'ex_bench',    name: 'Bench Press',        icon: '🏋️', type: 'weighted' },
-  { id: 'ex_row',           name: 'Bent-over Row',           icon: '🏋️', type: 'weighted'   },
-  { id: 'ex_mil_press',     name: 'Barbell: Military Press', icon: '🏋️', type: 'weighted'   },
-  { id: 'ex_upright_row',   name: 'Barbell: Upright Row',    icon: '🏋️', type: 'weighted'   },
-  { id: 'ex_bicep_curl',    name: 'Barbell: Bicep Curl',     icon: '💪', type: 'weighted'   },
-  { id: 'ex_squat_w',       name: 'Weighted Squat',          icon: '🦵', type: 'weighted'   },
-  { id: 'ex_idl_w',         name: 'Weighted IDL',            icon: '🦵', type: 'weighted'   },
-  { id: 'ex_russian_twist', name: 'Russian Twists',          icon: '🔥', type: 'bodyweight' },
-  { id: 'ex_flutter_kick',  name: 'Flutter Kicks',           icon: '🔥', type: 'bodyweight' },
-  { id: 'ex_custom',        name: 'Custom Exercise',         icon: '⚡', type: 'bodyweight' },
+  { id: 'ex_pushup',   name: 'Push-ups',           icon: '💪', type: 'bodyweight', muscleGroup: 'push' },
+  { id: 'ex_situp',    name: 'Sit-ups / Crunches', icon: '🔥', type: 'bodyweight', muscleGroup: 'core' },
+  { id: 'ex_pullup',   name: 'Pull-ups / Chin-ups',icon: '🏋️', type: 'bodyweight', muscleGroup: 'pull' },
+  { id: 'ex_squat',    name: 'Squats',             icon: '🦵', type: 'bodyweight', muscleGroup: 'legs' },
+  { id: 'ex_lunge',    name: 'Lunges',             icon: '🦵', type: 'bodyweight', muscleGroup: 'legs' },
+  { id: 'ex_dip',      name: 'Dips',               icon: '💪', type: 'bodyweight', muscleGroup: 'push' },
+  { id: 'ex_burpee',   name: 'Burpees',            icon: '🔥', type: 'bodyweight', muscleGroup: 'core' },
+  { id: 'ex_plank',    name: 'Plank (sec held)',   icon: '⏱', type: 'bodyweight', muscleGroup: 'core' },
+  { id: 'ex_idl',      name: 'Inverted Leg Raises',icon: '🦵', type: 'bodyweight', muscleGroup: 'core' },
+  { id: 'ex_dumbbell', name: 'Dumbbell Exercise',  icon: '🏋️', type: 'weighted',   muscleGroup: null   },
+  { id: 'ex_bench',    name: 'Bench Press',        icon: '🏋️', type: 'weighted',   muscleGroup: 'push' },
+  { id: 'ex_row',           name: 'Bent-over Row',           icon: '🏋️', type: 'weighted',   muscleGroup: 'pull' },
+  { id: 'ex_mil_press',     name: 'Barbell: Military Press', icon: '🏋️', type: 'weighted',   muscleGroup: 'push' },
+  { id: 'ex_upright_row',   name: 'Barbell: Upright Row',    icon: '🏋️', type: 'weighted',   muscleGroup: 'push' },
+  { id: 'ex_bicep_curl',    name: 'Barbell: Bicep Curl',     icon: '💪', type: 'weighted',   muscleGroup: 'pull' },
+  { id: 'ex_squat_w',       name: 'Weighted Squat',          icon: '🦵', type: 'weighted',   muscleGroup: 'legs' },
+  { id: 'ex_idl_w',         name: 'Weighted IDL',            icon: '🦵', type: 'weighted',   muscleGroup: 'core' },
+  { id: 'ex_russian_twist', name: 'Russian Twists',          icon: '🔥', type: 'bodyweight', muscleGroup: 'core' },
+  { id: 'ex_flutter_kick',  name: 'Flutter Kicks',           icon: '🔥', type: 'bodyweight', muscleGroup: 'core' },
+  { id: 'ex_custom',        name: 'Custom Exercise',         icon: '⚡', type: 'bodyweight', muscleGroup: null   },
 ];
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -150,13 +150,15 @@ function renderLog(container) {
   `;
 
   document.getElementById('add-activity-btn').onclick = () => {
-    logState.activities.push({ activityId: 'act_jog', name: 'Jogging / Running', durationMinutes: 30, type: 'cardio', estimatedCalories: 300 });
+    const def = ACTIVITY_DEFS[0];
+    logState.activities.push({ activityId: def.id, name: def.name, durationMinutes: 30, type: def.type, estimatedCalories: 300, isStretch: def.isStretch || false });
     renderActivityRow(logState.activities.length - 1);
     updatePreview();
   };
 
   document.getElementById('add-exercise-btn').onclick = () => {
-    logState.exercises.push({ exerciseId: 'ex_pushup', name: 'Push-ups', sets: 3, reps: 10, totalReps: 30, type: 'bodyweight' });
+    const def = EXERCISE_DEFS[0];
+    logState.exercises.push({ exerciseId: def.id, name: def.name, sets: 3, reps: 10, totalReps: 30, type: def.type, muscleGroup: def.muscleGroup });
     renderExerciseRow(logState.exercises.length - 1);
     updatePreview();
   };
@@ -267,6 +269,7 @@ function applyRoutine(routineId) {
       logState.activities.push({
         activityId: def.id, name: def.name, type: def.type,
         durationMinutes: mins, estimatedCalories: Math.round(def.calPerMin * mins),
+        isStretch: def.isStretch || false,
       });
     } else if (item.kind === 'exercise') {
       const def  = EXERCISE_DEFS.find(d => d.id === item.id) || EXERCISE_DEFS[0];
@@ -274,7 +277,7 @@ function applyRoutine(routineId) {
       const reps = item.target.reps || 10;
       logState.exercises.push({
         exerciseId: def.id, name: def.name, type: def.type,
-        sets, reps, totalReps: sets * reps,
+        sets, reps, totalReps: sets * reps, muscleGroup: def.muscleGroup,
       });
     }
   }
@@ -338,6 +341,7 @@ function renderActivityRow(idx) {
     logState.activities[idx].activityId = def.id;
     logState.activities[idx].name       = def.name;
     logState.activities[idx].type       = def.type;
+    logState.activities[idx].isStretch  = def.isStretch || false;
     logState.activities[idx].customName = '';
     const dur = logState.activities[idx].durationMinutes;
     logState.activities[idx].estimatedCalories = Math.round(def.calPerMin * dur);
@@ -401,11 +405,24 @@ function renderExerciseRow(idx) {
   const bonusChip = (bonus && bonus.kind === 'exercise' && bonus.itemId === entry.exerciseId)
     ? `<span class="bonus-chip-inline">⭐ +25% bonus</span>` : '';
 
+  const mg = entry.muscleGroup;
+  const mgOpts = [
+    ['', '— group —'],
+    ['push', 'Push (Chest/Shoulders)'],
+    ['pull', 'Pull (Back/Biceps)'],
+    ['legs', 'Legs (Quads/Hams)'],
+    ['core', 'Core (Abs/Back)'],
+  ].map(([v, l]) => `<option value="${v}" ${mg === v ? 'selected' : ''}>${l}</option>`).join('');
+
   el.innerHTML = `
-    <div class="form-group" style="margin-bottom:10px;">
+    <div class="form-group" style="margin-bottom:6px;">
       <label class="form-label">Exercise ${bonusChip}</label>
       <select id="ex-type-${idx}">${opts}</select>
       ${entry.exerciseId === 'ex_custom' ? `<input id="ex-custom-name-${idx}" placeholder="Exercise name" value="${escHtml(entry.customName||'')}" style="margin-top:6px;">` : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+      <span style="font-size:0.7rem;color:var(--text-dim);white-space:nowrap;">Group:</span>
+      <select id="ex-muscle-${idx}" style="flex:1;font-size:0.75rem;">${mgOpts}</select>
     </div>
     <div class="form-row-3" style="align-items:end;">
       <div class="form-group" style="margin:0;">
@@ -423,13 +440,21 @@ function renderExerciseRow(idx) {
 
   document.getElementById('ex-type-' + idx).onchange = e => {
     const def = EXERCISE_DEFS.find(d => d.id === e.target.value) || EXERCISE_DEFS[0];
-    logState.exercises[idx].exerciseId = def.id;
-    logState.exercises[idx].name       = def.name;
-    logState.exercises[idx].type       = def.type;
-    logState.exercises[idx].customName = '';
+    logState.exercises[idx].exerciseId  = def.id;
+    logState.exercises[idx].name        = def.name;
+    logState.exercises[idx].type        = def.type;
+    logState.exercises[idx].muscleGroup = def.muscleGroup;
+    logState.exercises[idx].customName  = '';
     renderExerciseRow(idx);
     updatePreview();
   };
+
+  const muscleEl = document.getElementById('ex-muscle-' + idx);
+  if (muscleEl) {
+    muscleEl.onchange = () => {
+      logState.exercises[idx].muscleGroup = muscleEl.value || null;
+    };
+  }
 
   const updateTotalReps = () => {
     const sets = Math.max(1, parseInt(document.getElementById('ex-sets-' + idx)?.value) || 1);

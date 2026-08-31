@@ -19,12 +19,15 @@ function renderDashboard(container) {
   const schedule = Store.getSchedule();
   const todayRoutineId = schedule[Store.weekdayKey()];
   const todayRoutine   = todayRoutineId ? Routines.getRoutine(todayRoutineId) : null;
-  const todayLog       = Store.getLog().filter(e => e.date === today);
+  const allLogs        = Store.getLog();
+  const todayLog       = allLogs.filter(e => e.date === today);
   const tierInfo       = Engine.disciplineTier(player, todayLog);
   const totals         = Engine.dailyTotals(todayLog);
   const bonus    = Engine.getActiveBonus(Date.now());
   const heroHtml = renderStatsHero(player, today);
   const macroHtml = renderMacroCard(player, totals);
+  const deficitHtml = renderDeficitCard(player, totals, todayLog);
+  const muscleCoverageHtml = renderMuscleCoverageCard(player, allLogs, weekStart);
   const weighInHtml = renderWeighInWidget(player);
   const sleepHtml = renderSleepWidget();
   const momentumHtml = renderStatMomentumCard(player, totals, tierInfo);
@@ -41,11 +44,13 @@ function renderDashboard(container) {
   container.innerHTML = `
     ${heroHtml}
     ${macroHtml}
+    ${deficitHtml}
     <div class="daily-widget-grid">
       ${weighInHtml}
       ${sleepHtml}
     </div>
     ${momentumHtml}
+    ${muscleCoverageHtml}
     ${forecastHtml}
     ${bonusHtml}
     ${tierHtml}
@@ -576,6 +581,128 @@ function renderStreakBar(player) {
     <div class="streak-display">
       <span class="streak-fire">🔥</span>
       <span class="streak-text">${player.streakDays}-DAY STREAK</span>
+    </div>
+  `;
+}
+
+/* ── Caloric deficit card ─────────────────────── */
+
+function renderDeficitCard(player, totals, todayLog) {
+  const tdeeResult = Engine.computeTDEE(player);
+  if (!tdeeResult) {
+    return `
+      <div class="card" style="padding:14px 16px;">
+        <div class="card-title" style="margin-bottom:6px;">CALORIC DEFICIT</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);">
+          Enter body stats in
+          <button class="btn-ghost btn-sm" style="display:inline;padding:0 2px;font-size:0.78rem;vertical-align:baseline;" onclick="Router.navigate('settings')">Settings</button>
+          to track your caloric deficit.
+        </div>
+      </div>
+    `;
+  }
+
+  const { tdee, targetCalories } = tdeeResult;
+  const consumed     = Math.round(totals.calories);
+  const burned       = Engine.getTodayCaloriesBurned(todayLog);
+  const net          = consumed - burned;
+  const deficitGoal  = (player.body && player.body.deficitGoal) || 500;
+  const deficitAchieved = Math.max(0, tdee - net);
+  const pct          = deficitGoal > 0 ? Math.min(100, Math.round((deficitAchieved / deficitGoal) * 100)) : 0;
+  const hitGoal      = deficitAchieved >= deficitGoal;
+  const barClass     = hitGoal ? 'progress-fill-green' : 'progress-fill-gold';
+  const defColor     = hitGoal ? 'var(--accent-green)' : 'var(--accent-gold)';
+
+  return `
+    <div class="card" style="padding:14px 16px;">
+      <div class="card-title" style="margin-bottom:8px;">CALORIC DEFICIT</div>
+      <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;flex-wrap:wrap;gap:4px;">
+        <span>TDEE <strong style="color:var(--text-primary);">${tdee}</strong></span>
+        <span>Target <strong style="color:var(--text-primary);">${targetCalories}</strong></span>
+        <span>Goal −${deficitGoal} kcal/day</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;text-align:center;">
+        <div style="flex:1;">
+          <div style="font-size:0.62rem;color:var(--text-dim);">EATEN</div>
+          <div style="font-family:var(--font-display);font-size:0.65rem;color:var(--text-primary);">${consumed}</div>
+        </div>
+        <div style="align-self:center;color:var(--text-dim);font-size:0.8rem;">−</div>
+        <div style="flex:1;">
+          <div style="font-size:0.62rem;color:var(--text-dim);">BURNED</div>
+          <div style="font-family:var(--font-display);font-size:0.65rem;color:var(--accent-green);">${burned}</div>
+        </div>
+        <div style="align-self:center;color:var(--text-dim);font-size:0.8rem;">=</div>
+        <div style="flex:1;">
+          <div style="font-size:0.62rem;color:var(--text-dim);">NET</div>
+          <div style="font-family:var(--font-display);font-size:0.65rem;color:var(--text-primary);">${net}</div>
+        </div>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">
+        Deficit: <strong style="color:${defColor};">${deficitAchieved} / ${deficitGoal} kcal${hitGoal ? ' ✓' : ''}</strong>
+      </div>
+      <div class="progress-track" style="height:6px;">
+        <div class="progress-fill ${barClass}" style="width:${pct}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+/* ── Weekly muscle coverage card ─────────────── */
+
+function renderMuscleCoverageCard(player, allLogs, weekStart) {
+  const weekLogs = allLogs.filter(e => e.date >= weekStart);
+  const daySets = { push: new Set(), pull: new Set(), legs: new Set(), core: new Set(), stretch: new Set() };
+
+  for (const entry of weekLogs) {
+    for (const ex of (entry.exercises || [])) {
+      if (ex.muscleGroup && daySets[ex.muscleGroup]) {
+        daySets[ex.muscleGroup].add(entry.date);
+      }
+    }
+    for (const act of (entry.activities || [])) {
+      if (act.isStretch) daySets.stretch.add(entry.date);
+    }
+  }
+
+  const sessions = {
+    push:    daySets.push.size,
+    pull:    daySets.pull.size,
+    legs:    daySets.legs.size,
+    core:    daySets.core.size,
+    stretch: daySets.stretch.size,
+  };
+
+  const targets = (player.goals && player.goals.weeklyMuscleTargets) || { push: 2, pull: 2, legs: 2, core: 2 };
+  const stretchTarget = (player.goals && player.goals.weeklyStretchTarget != null) ? player.goals.weeklyStretchTarget : 2;
+
+  function groupRow(label, key, target) {
+    const done = sessions[key] || 0;
+    const pct  = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : (done > 0 ? 100 : 0);
+    const hit  = target > 0 && done >= target;
+    const barClass = hit ? 'progress-fill-green' : 'progress-fill-gold';
+    const valColor = hit ? 'var(--accent-green)' : 'var(--text-primary)';
+    const targetTxt = target > 0 ? target : '—';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:0.74rem;color:var(--text-muted);flex:0 0 62px;">${label}</span>
+        <div class="progress-track" style="flex:1;height:6px;">
+          <div class="progress-fill ${barClass}" style="width:${pct}%"></div>
+        </div>
+        <span style="font-size:0.72rem;font-family:var(--font-display);color:${valColor};flex:0 0 44px;text-align:right;">
+          ${done}/${targetTxt}${hit ? ' ✓' : ''}
+        </span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card" style="padding:14px 16px;">
+      <div class="card-title" style="margin-bottom:8px;">MUSCLE COVERAGE (THIS WEEK)</div>
+      ${groupRow('Push', 'push', targets.push)}
+      ${groupRow('Pull', 'pull', targets.pull)}
+      ${groupRow('Legs', 'legs', targets.legs)}
+      ${groupRow('Core', 'core', targets.core)}
+      ${groupRow('Stretch', 'stretch', stretchTarget)}
     </div>
   `;
 }

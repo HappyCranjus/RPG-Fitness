@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rpgfit-v17';
+const CACHE_NAME = 'rpgfit-v18';
 
 // Paths are relative to the service worker's location, so the app
 // works whether it's served from the domain root or a subpath

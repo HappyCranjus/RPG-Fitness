@@ -1093,6 +1093,26 @@ const Engine = (() => {
     return t;
   }
 
+  // Mifflin-St Jeor TDEE from player.body (US units stored, metric used internally).
+  // Returns { bmr, tdee, targetCalories } or null if body data is incomplete.
+  function computeTDEE(player) {
+    const b = player.body;
+    if (!b || !b.heightIn || !b.weightLbs || !b.age) return null;
+    const heightCm = b.heightIn * 2.54;
+    const weightKg = b.weightLbs * 0.453592;
+    const offset   = b.sex === 'female' ? -161 : 5;
+    const bmr      = 10 * weightKg + 6.25 * heightCm - 5 * b.age + offset;
+    const tdee     = Math.round(bmr * (b.activityLevel || 1.375));
+    const targetCalories = Math.max(1200, tdee - (b.deficitGoal || 500));
+    return { bmr: Math.round(bmr), tdee, targetCalories };
+  }
+
+  // Sum estimated calories burned from all activities in a set of log entries.
+  function getTodayCaloriesBurned(todayLog) {
+    return (todayLog || []).reduce((sum, e) =>
+      sum + (e.activities || []).reduce((s, a) => s + (a.estimatedCalories || 0), 0), 0);
+  }
+
   // Time until the next 30-min stat decay tick fires.
   function msUntilNextStatTick(player, now) {
     if (!player.lastStatDecayTickAt) return STAT_DECAY_TICK_MS;
@@ -1157,6 +1177,8 @@ const Engine = (() => {
     msUntilNextStatTick,
     msUntilNextHpTick,
     dailyTotals,
+    computeTDEE,
+    getTodayCaloriesBurned,
 
     // bonus rotation
     getActiveBonus,
