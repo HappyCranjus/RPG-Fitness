@@ -236,6 +236,14 @@ function renderSettings(container) {
     </div>
 
     <div class="card mt-12">
+      <div class="card-title" style="margin-bottom:6px;">NOTIFICATIONS</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">
+        Required for medication reminders to fire when the app is in the background.
+      </div>
+      <div id="notif-status-section"></div>
+    </div>
+
+    <div class="card mt-12">
       <div class="card-title" style="margin-bottom:14px;">DATA</div>
 
       <div class="settings-row">
@@ -280,6 +288,7 @@ function renderSettings(container) {
   });
   updateTdeePreview();
   renderMedicationsList();
+  renderNotificationStatus();
 }
 
 function updateTdeePreview() {
@@ -555,6 +564,52 @@ function removeMedTime(id, idx) {
   med.times.splice(idx, 1);
   Store.setMedications(meds);
   renderMedicationsList();
+}
+
+/* ── Notification permission management ──────── */
+
+function buildNotifStatusHtml() {
+  if (!('Notification' in window)) {
+    return '<div style="font-size:0.78rem;color:var(--text-dim);">Notifications are not supported in this browser.</div>';
+  }
+  const perm = Notification.permission;
+  if (perm === 'granted') {
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:0.78rem;color:var(--accent-green);">Notifications enabled ✓</span>
+        <button class="btn btn-secondary btn-sm" style="width:auto;" onclick="testNotification()">Send Test</button>
+      </div>
+    `;
+  }
+  if (perm === 'denied') {
+    return `
+      <div style="font-size:0.78rem;color:var(--accent-red);margin-bottom:6px;">Blocked by browser ✗</div>
+      <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;">
+        Open your browser's site settings, find this page, and set Notifications to <strong>Allow</strong>, then refresh.
+      </div>
+    `;
+  }
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:0.78rem;color:var(--accent-gold);">Not yet enabled</span>
+      <button class="btn btn-primary btn-sm" style="width:auto;" onclick="enableNotifications()">Enable Notifications</button>
+    </div>
+  `;
+}
+
+function renderNotificationStatus() {
+  const el = document.getElementById('notif-status-section');
+  if (!el) return;
+  el.innerHTML = buildNotifStatusHtml();
+}
+
+async function enableNotifications() {
+  await Notifications.requestPermission();
+  renderNotificationStatus();
+}
+
+function testNotification() {
+  Notifications.show('RPG Fitness', 'Test notification — reminders are working!');
 }
 
 Router.register('settings', renderSettings);
