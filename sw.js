@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rpgfit-v18';
+const CACHE_NAME = 'rpgfit-v19';
 
 // Paths are relative to the service worker's location, so the app
 // works whether it's served from the domain root or a subpath
@@ -44,6 +44,28 @@ self.addEventListener('activate', event => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('push', event => {
+  const data = event.data ? event.data.json() : { title: 'RPG Fitness', body: 'Time to check in!' };
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(c => c.url && 'focus' in c);
+      if (existing) return existing.focus();
+      return clients.openWindow('./');
+    })
   );
 });
 

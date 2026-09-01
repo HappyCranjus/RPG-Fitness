@@ -226,6 +226,15 @@ function renderSettings(container) {
       </div>
     </div>
 
+    <div class="card mt-12" id="medications-card">
+      <div class="card-title" style="margin-bottom:6px;">MEDICATIONS</div>
+      <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">
+        Set daily reminders. Notifications fire when the app is open or in the background.
+      </div>
+      <div id="med-list"></div>
+      <button class="btn btn-secondary mt-8" style="width:100%;" onclick="addMedication()">+ Add Medication</button>
+    </div>
+
     <div class="card mt-12">
       <div class="card-title" style="margin-bottom:14px;">DATA</div>
 
@@ -270,6 +279,7 @@ function renderSettings(container) {
     if (el) { el.oninput = updateTdeePreview; el.onchange = updateTdeePreview; }
   });
   updateTdeePreview();
+  renderMedicationsList();
 }
 
 function updateTdeePreview() {
@@ -382,14 +392,16 @@ function saveSettings() {
 function exportData() {
   const data = {
     exportedAt: new Date().toISOString(),
-    player:       Store.getPlayer(),
-    log:          Store.getLog(),
-    quests:       Store.getQuests(),
-    monsters:     Store.getMonsters(),
-    achievements: Store.getAchievements(),
-    weightLog:    Store.getWeightLog(),
-    sleepLog:     Store.getSleepLog(),
-    waterLog:     Store.getWaterLog(),
+    player:        Store.getPlayer(),
+    log:           Store.getLog(),
+    quests:        Store.getQuests(),
+    monsters:      Store.getMonsters(),
+    achievements:  Store.getAchievements(),
+    weightLog:     Store.getWeightLog(),
+    sleepLog:      Store.getSleepLog(),
+    waterLog:      Store.getWaterLog(),
+    medications:   Store.getMedications(),
+    deficitHistory: Store.getDeficitHistory(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -418,9 +430,11 @@ function importData(event) {
       if (data.quests)      Store.setQuests(data.quests);
       if (data.monsters)    Store.setMonsters(data.monsters);
       if (data.achievements)Store.setAchievements(data.achievements);
-      if (data.weightLog)   localStorage.setItem('eapp_weightLog', JSON.stringify(data.weightLog));
-      if (data.sleepLog)    localStorage.setItem('eapp_sleepLog',  JSON.stringify(data.sleepLog));
-      if (data.waterLog)    localStorage.setItem('eapp_waterLog',  JSON.stringify(data.waterLog));
+      if (data.weightLog)      localStorage.setItem('eapp_weightLog',     JSON.stringify(data.weightLog));
+      if (data.sleepLog)       localStorage.setItem('eapp_sleepLog',      JSON.stringify(data.sleepLog));
+      if (data.waterLog)       localStorage.setItem('eapp_waterLog',      JSON.stringify(data.waterLog));
+      if (data.medications)    localStorage.setItem('eapp_medications',   JSON.stringify(data.medications));
+      if (data.deficitHistory) localStorage.setItem('eapp_deficitHistory',JSON.stringify(data.deficitHistory));
 
       Toast.show('Data imported successfully!', 'success');
       Router.navigate('dashboard');
@@ -451,6 +465,96 @@ function resetAll() {
   Store.clearAll();
   Modal.hide();
   location.reload();
+}
+
+/* ── Medication management ───────────────────── */
+
+function renderMedicationsList() {
+  const el = document.getElementById('med-list');
+  if (!el) return;
+  const meds = Store.getMedications();
+  if (!meds.length) {
+    el.innerHTML = '<div style="font-size:0.78rem;color:var(--text-dim);padding:6px 0;">No medications added yet.</div>';
+    return;
+  }
+  el.innerHTML = meds.map(med => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <input type="text" value="${escHtml(med.name)}" placeholder="Medication name"
+          style="flex:1;font-size:0.8rem;"
+          onchange="updateMedField('${med.id}','name',this.value)">
+        <input type="text" value="${escHtml(med.dose || '')}" placeholder="Dose"
+          style="width:72px;font-size:0.8rem;text-align:center;"
+          onchange="updateMedField('${med.id}','dose',this.value)">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" ${med.enabled ? 'checked' : ''}
+            onchange="updateMedField('${med.id}','enabled',this.checked)">
+          On
+        </label>
+        <button class="btn-ghost btn-sm" style="color:var(--accent-red);font-size:0.8rem;"
+          onclick="deleteMedication('${med.id}')">✕</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        ${(med.times || []).map((t, i) => `
+          <input type="time" value="${t}"
+            style="font-size:0.78rem;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2,var(--surface));color:var(--text-primary);"
+            onchange="updateMedTime('${med.id}',${i},this.value)">
+          <button class="btn-ghost btn-sm" style="font-size:0.75rem;color:var(--text-dim);"
+            onclick="removeMedTime('${med.id}',${i})">−</button>
+        `).join('')}
+        ${(med.times || []).length < 4 ? `
+          <button class="btn-ghost btn-sm" style="font-size:0.75rem;"
+            onclick="addMedTime('${med.id}')">+ Time</button>
+        ` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function addMedication() {
+  const meds = Store.getMedications();
+  meds.push({ id: 'med_' + Date.now(), name: '', dose: '', times: ['08:00'], enabled: true });
+  Store.setMedications(meds);
+  renderMedicationsList();
+}
+
+function deleteMedication(id) {
+  Store.setMedications(Store.getMedications().filter(m => m.id !== id));
+  renderMedicationsList();
+}
+
+function updateMedField(id, field, value) {
+  const meds = Store.getMedications();
+  const med  = meds.find(m => m.id === id);
+  if (!med) return;
+  med[field] = value;
+  Store.setMedications(meds);
+}
+
+function updateMedTime(id, idx, value) {
+  const meds = Store.getMedications();
+  const med  = meds.find(m => m.id === id);
+  if (!med) return;
+  med.times[idx] = value;
+  Store.setMedications(meds);
+}
+
+function addMedTime(id) {
+  const meds = Store.getMedications();
+  const med  = meds.find(m => m.id === id);
+  if (!med) return;
+  med.times.push('08:00');
+  Store.setMedications(meds);
+  renderMedicationsList();
+}
+
+function removeMedTime(id, idx) {
+  const meds = Store.getMedications();
+  const med  = meds.find(m => m.id === id);
+  if (!med) return;
+  med.times.splice(idx, 1);
+  Store.setMedications(meds);
+  renderMedicationsList();
 }
 
 Router.register('settings', renderSettings);

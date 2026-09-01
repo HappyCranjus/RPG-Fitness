@@ -308,10 +308,30 @@ const Store = (() => {
       return this.setWaterToday(current + (Number(n) || 0));
     },
 
+    getMedications()       { return get('medications') || []; },
+    setMedications(list)   { set('medications', list); },
+
+    getMedReminderLog()    { return get('medReminderLog') || {}; },
+    setMedReminderLog(map) { set('medReminderLog', map); },
+
+    getDeficitHistory() { return get('deficitHistory') || []; },
+    recordDeficitSnapshot(date, tdee, consumed, burned, deficitGoal) {
+      const hist = get('deficitHistory') || [];
+      const net  = consumed - burned;
+      const deficit = Math.max(0, tdee - net);
+      const snap = { date, tdee, consumed: Math.round(consumed), burned, net: Math.round(net), deficit, deficitGoal, hitGoal: deficit >= deficitGoal };
+      const idx = hist.findIndex(h => h.date === date);
+      if (idx >= 0) hist[idx] = snap;
+      else hist.unshift(snap);
+      if (hist.length > 90) hist.splice(90);
+      set('deficitHistory', hist);
+    },
+
     clearAll() {
       ['player','log','quests','monsters','achievements','settings',
        'attacks','cycleHistory','schedule','statHistory','bonus',
-       'mealLibrary','weightLog','sleepLog','waterLog'].forEach(k => {
+       'mealLibrary','weightLog','sleepLog','waterLog',
+       'medications','medReminderLog','deficitHistory'].forEach(k => {
         localStorage.removeItem(PREFIX + k);
       });
     },

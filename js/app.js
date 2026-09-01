@@ -62,6 +62,62 @@ const Toast = (() => {
   return { show };
 })();
 
+/* ── Browser notifications ───────────────────── */
+const Notifications = (() => {
+  async function requestPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+  }
+
+  async function show(title, body) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, { body, icon: './icons/icon-192.png', badge: './icons/icon-192.png' });
+    } else {
+      new Notification(title, { body });
+    }
+  }
+
+  return { requestPermission, show };
+})();
+
+/* ── Medication reminder engine ──────────────── */
+const MedReminder = (() => {
+  let _timer = null;
+
+  function check() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const meds = Store.getMedications().filter(m => m.enabled && m.times && m.times.length);
+    if (!meds.length) return;
+
+    const now  = new Date();
+    const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const log  = Store.getMedReminderLog();
+
+    meds.forEach(med => {
+      med.times.forEach(t => {
+        if (t !== hhmm) return;
+        const key   = `${med.id}|${t}`;
+        const last  = log[key] || 0;
+        if (Date.now() - last < 55 * 60 * 1000) return;
+        log[key] = Date.now();
+        Store.setMedReminderLog(log);
+        Notifications.show('Medication Reminder', `Time to take ${med.name}${med.dose ? ' ' + med.dose : ''}`);
+      });
+    });
+  }
+
+  function init() {
+    check();
+    _timer = setInterval(check, 60 * 1000);
+  }
+
+  return { init, check };
+})();
+
 /* ── Onboarding ──────────────────────────────── */
 function showOnboarding() {
   const nav = document.getElementById('bottom-nav');
@@ -400,6 +456,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateStatHeader();
     startHeaderCountdownTicker();
+
+    // Request notification permission after a short delay (avoids immediate prompts)
+    setTimeout(() => Notifications.requestPermission(), 3000);
+    MedReminder.init();
 
     Quests.refresh(today, weekStart);
 

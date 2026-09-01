@@ -27,6 +27,7 @@ function renderDashboard(container) {
   const heroHtml = renderStatsHero(player, today);
   const macroHtml = renderMacroCard(player, totals);
   const deficitHtml = renderDeficitCard(player, totals, todayLog);
+  const deficitHistoryHtml = renderDeficitHistoryCard(player);
   const muscleCoverageHtml = renderMuscleCoverageCard(player, allLogs, weekStart);
   const weighInHtml = renderWeighInWidget(player);
   const sleepHtml = renderSleepWidget();
@@ -45,6 +46,7 @@ function renderDashboard(container) {
     ${heroHtml}
     ${macroHtml}
     ${deficitHtml}
+    ${deficitHistoryHtml}
     <div class="daily-widget-grid">
       ${weighInHtml}
       ${sleepHtml}
@@ -642,6 +644,63 @@ function renderDeficitCard(player, totals, todayLog) {
       </div>
       <div class="progress-track" style="height:6px;">
         <div class="progress-fill ${barClass}" style="width:${pct}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+/* ── Caloric deficit history card ────────────── */
+
+function renderDeficitHistoryCard(player) {
+  const tdeeResult = Engine.computeTDEE(player);
+  if (!tdeeResult) return '';
+
+  const history = Store.getDeficitHistory();
+  if (history.length < 2) return '';
+
+  const days = history.slice(0, 14).reverse(); // oldest → newest
+  const deficitGoal = (player.body && player.body.deficitGoal) || 500;
+  const maxVal = Math.max(deficitGoal * 1.5, ...days.map(d => d.deficit || 0), 1);
+
+  const BAR_W  = 14;
+  const BAR_GAP = 3;
+  const CHART_H = 60;
+  const LABEL_H = 16;
+  const totalW  = days.length * (BAR_W + BAR_GAP) - BAR_GAP;
+
+  const goalY = Math.round(CHART_H - (deficitGoal / maxVal) * CHART_H);
+
+  const bars = days.map((d, i) => {
+    const pct    = Math.min(1, (d.deficit || 0) / maxVal);
+    const barH   = Math.max(2, Math.round(pct * CHART_H));
+    const x      = i * (BAR_W + BAR_GAP);
+    const y      = CHART_H - barH;
+    const color  = d.hitGoal ? 'var(--accent-green)' : 'var(--accent-gold)';
+    const dayAbbr = new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1);
+    return `
+      <rect x="${x}" y="${y}" width="${BAR_W}" height="${barH}" fill="${color}" rx="2"/>
+      <text x="${x + BAR_W / 2}" y="${CHART_H + LABEL_H - 2}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${dayAbbr}</text>
+    `;
+  }).join('');
+
+  const hitCount = days.filter(d => d.hitGoal).length;
+
+  return `
+    <div class="card" style="padding:14px 16px;">
+      <div class="card-title" style="margin-bottom:4px;">DEFICIT HISTORY</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">
+        Last ${days.length} days &nbsp;·&nbsp; Goal met <strong style="color:var(--accent-green);">${hitCount}/${days.length}</strong> days
+      </div>
+      <svg width="100%" viewBox="0 0 ${totalW} ${CHART_H + LABEL_H}" preserveAspectRatio="xMidYMid meet" style="overflow:visible;">
+        <!-- goal line -->
+        <line x1="0" y1="${goalY}" x2="${totalW}" y2="${goalY}"
+          stroke="var(--accent-gold)" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+        ${bars}
+      </svg>
+      <div style="font-size:0.68rem;color:var(--text-dim);margin-top:6px;display:flex;gap:10px;">
+        <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent-green);border-radius:2px;"></span> Goal met</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent-gold);border-radius:2px;"></span> Below goal</span>
+        <span style="margin-left:auto;">Goal: −${deficitGoal} kcal/day</span>
       </div>
     </div>
   `;

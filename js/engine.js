@@ -1003,6 +1003,14 @@ const Engine = (() => {
     Store.setPlayer(player);
     Store.recordStatSnapshot(player, today);
 
+    const allTodayLog  = Store.getLog().filter(e => e.date === today);
+    const defTotals    = dailyTotals(allTodayLog);
+    const defBurned    = getTodayCaloriesBurned(allTodayLog);
+    const tdeeRes      = computeTDEE(player);
+    if (tdeeRes) {
+      Store.recordDeficitSnapshot(today, tdeeRes.tdee, defTotals.calories, defBurned, (player.body && player.body.deficitGoal) || 500);
+    }
+
     const questUpdates = Quests.updateProgress(today, Store.weekStart());
 
     const freshPlayer   = Store.getPlayer();
