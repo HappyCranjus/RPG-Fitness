@@ -31,6 +31,7 @@ function renderDashboard(container) {
   const muscleCoverageHtml = renderMuscleCoverageCard(player, allLogs, weekStart);
   const weighInHtml = renderWeighInWidget(player);
   const sleepHtml = renderSleepWidget();
+  const medsHtml = renderMedsWidget();
   const momentumHtml = renderStatMomentumCard(player, totals, tierInfo);
   const bonusHtml = renderBonusBanner(bonus, Date.now());
   const forecastHtml = renderHpForecast(player);
@@ -50,6 +51,7 @@ function renderDashboard(container) {
     <div class="daily-widget-grid">
       ${weighInHtml}
       ${sleepHtml}
+      ${medsHtml}
     </div>
     ${momentumHtml}
     ${muscleCoverageHtml}
@@ -190,7 +192,7 @@ function renderStatsHero(player, today) {
 /* ── Discipline tier banner ─────────────────────── */
 
 function renderTierBanner(tierInfo, player) {
-  const dots = ['showUp', 'calories', 'protein', 'fiberWater', 'weighIn', 'sleep']
+  const dots = ['showUp', 'calories', 'protein', 'medication', 'weighIn', 'sleep']
     .map(k => `<span class="tier-dot ${tierInfo.credits[k] ? 'on' : 'off'}"></span>`).join('');
   const max = tierInfo.maxPoints ?? 6;
   return `
@@ -474,6 +476,46 @@ function promptSleep() {
   }
   Store.setSleepToday(hours, quality);
   Toast.show('Sleep logged — DIS credit earned.', 'success');
+  Router.refresh();
+}
+
+/* ── Meds widget ────────────────────────────────── */
+
+function renderMedsWidget() {
+  const enabledMeds = Store.getMedications().filter(m => m.enabled);
+  if (!enabledMeds.length) return '';
+
+  const taken = Store.getMedTakenToday();
+  if (taken) {
+    return `
+      <div class="daily-widget meds-widget">
+        <div class="daily-widget-row">
+          <span class="daily-widget-icon">💊</span>
+          <div class="daily-widget-main">
+            <div class="daily-widget-value" style="color:var(--accent-green);">Meds taken ✓</div>
+            <div class="daily-widget-sub" style="color:var(--accent-green);">DIS credit earned</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="daily-widget meds-widget">
+      <div class="daily-widget-row">
+        <span class="daily-widget-icon">💊</span>
+        <div class="daily-widget-main">
+          <div class="daily-widget-value">Meds not logged</div>
+          <div class="daily-widget-sub" style="color:var(--text-muted);">Log for DIS credit</div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="markMedsTaken()">Took Meds</button>
+      </div>
+    </div>
+  `;
+}
+
+function markMedsTaken() {
+  Store.setMedTakenToday();
+  Toast.show('Meds logged — DIS credit earned.', 'success');
   Router.refresh();
 }
 

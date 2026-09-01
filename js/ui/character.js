@@ -164,7 +164,7 @@ function renderCharacterBody(container) {
         ${credit('Workout logged', tierInfo.credits.showUp)}
         ${credit(`Calories ±10% (${Math.round(tierInfo.totals.calories)}/${player.goals.dailyCalories})`, tierInfo.credits.calories)}
         ${credit(`Protein ≥ ${player.goals.dailyProteinG}g (${Math.round(tierInfo.totals.protein)}g)`, tierInfo.credits.protein)}
-        ${credit(`Fiber ≥ ${player.goals.dailyFiberG}g (${Math.round(tierInfo.totals.fiber)}g) AND Water ≥ ${player.goals.dailyWaterOz}oz (${Math.round(tierInfo.totals.water)}oz)`, tierInfo.credits.fiberWater)}
+        ${credit('Took medication today', tierInfo.credits.medication)}
         ${credit('Weigh-in logged 4am–12pm', tierInfo.credits.weighIn)}
         ${credit('Sleep logged', tierInfo.credits.sleep)}
       </div>

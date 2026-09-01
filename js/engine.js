@@ -60,7 +60,7 @@ const Engine = (() => {
 
   // Daily stat acc bonuses for hitting nutrition goals (once per day each).
   const PROTEIN_STR_BONUS     = 3;  // STR acc when daily protein goal is hit
-  const FIBER_WATER_AGI_BONUS = 3;  // AGI acc when fiber+water goals both hit
+  const MED_AGI_BONUS = 3;  // AGI acc when medication taken today
   const CAL_ZONE_VIT_BONUS    = 3;  // VIT acc when calories land in 85–115% of goal
 
   // Added-sugar penalty: 2 HP per gram over the daily limit.
@@ -439,7 +439,7 @@ const Engine = (() => {
       showUp:     false,
       calories:   false,
       protein:    false,
-      fiberWater: false,
+      medication: false,
       weighIn:    false,
       sleep:      false,
     };
@@ -466,11 +466,10 @@ const Engine = (() => {
       s + (e.meals || []).reduce((ms, m) => ms + (m.fiberG || 0), 0), 0);
     const totalWater = (typeof Store !== 'undefined' && Store.getWaterToday)
       ? Store.getWaterToday() : 0;
-    const fiberGoal = player.goals.dailyFiberG || 0;
-    const waterGoal = player.goals.dailyWaterOz || 0;
-    if (fiberGoal > 0 && waterGoal > 0 &&
-        totalFiber >= fiberGoal && totalWater >= waterGoal) {
-      credits.fiberWater = true;
+
+    const enabledMeds = (typeof Store !== 'undefined') ? Store.getMedications().filter(m => m.enabled) : [];
+    if (enabledMeds.length > 0 && typeof Store !== 'undefined' && Store.getMedTakenToday()) {
+      credits.medication = true;
     }
 
     // Weigh-in credit: today's row must exist AND have been logged inside
@@ -494,7 +493,7 @@ const Engine = (() => {
       s + (e.meals || []).reduce((ms, m) => ms + (m.addedSugarG || 0), 0), 0);
 
     const points = (credits.showUp?1:0) + (credits.protein?1:0)
-                 + (credits.calories?1:0) + (credits.fiberWater?1:0)
+                 + (credits.calories?1:0) + (credits.medication?1:0)
                  + (credits.weighIn?1:0) + (credits.sleep?1:0);
     const tier   = tierFor(points);
     return {
@@ -779,7 +778,7 @@ const Engine = (() => {
 
   function resetDailyStatBonusIfNewDay(player, today) {
     if (!player.dailyStatBonusAwarded || player.dailyStatBonusAwarded.date !== today) {
-      player.dailyStatBonusAwarded = { date: today, protein: false, fiberWater: false, calZone: false };
+      player.dailyStatBonusAwarded = { date: today, protein: false, medication: false, calZone: false };
     }
   }
 
@@ -788,13 +787,9 @@ const Engine = (() => {
 
     const calGoal   = player.goals.dailyCalories || 0;
     const protGoal  = player.goals.dailyProteinG || 0;
-    const fiberGoal = player.goals.dailyFiberG   || 30;
-    const waterGoal = player.goals.dailyWaterOz  || 64;
 
     const totalCal     = todayLogWithNew.reduce((s, e) => s + e.meals.reduce((ms, m) => ms + (m.calories || 0), 0), 0);
     const totalProtein = todayLogWithNew.reduce((s, e) => s + e.meals.reduce((ms, m) => ms + (m.proteinG || 0), 0), 0);
-    const totalFiber   = todayLogWithNew.reduce((s, e) => s + e.meals.reduce((ms, m) => ms + (m.fiberG   || 0), 0), 0);
-    const totalWaterOz = (typeof Store !== 'undefined') ? Store.getWaterToday() : 0;
 
     const delta = { STR_acc: 0, AGI_acc: 0, VIT_acc: 0 };
 
@@ -802,9 +797,10 @@ const Engine = (() => {
       delta.STR_acc += PROTEIN_STR_BONUS;
       player.dailyStatBonusAwarded.protein = true;
     }
-    if (!player.dailyStatBonusAwarded.fiberWater && totalFiber >= fiberGoal && totalWaterOz >= waterGoal) {
-      delta.AGI_acc += FIBER_WATER_AGI_BONUS;
-      player.dailyStatBonusAwarded.fiberWater = true;
+    const enabledMedsBonus = (typeof Store !== 'undefined') ? Store.getMedications().filter(m => m.enabled) : [];
+    if (!player.dailyStatBonusAwarded.medication && enabledMedsBonus.length > 0 && Store.getMedTakenToday()) {
+      delta.AGI_acc += MED_AGI_BONUS;
+      player.dailyStatBonusAwarded.medication = true;
     }
     if (!player.dailyStatBonusAwarded.calZone && calGoal > 0) {
       const ratio = totalCal / calGoal;

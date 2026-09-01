@@ -82,7 +82,7 @@ const Store = (() => {
       lastMonsterAttackAt: now,
       lastStatDecayTickAt: now,
       dailyHealsAwarded:   { date: today, cal800: false, cal1600: false, protein: false },
-      dailyStatBonusAwarded: { date: today, protein: false, fiberWater: false, calZone: false },
+      dailyStatBonusAwarded: { date: today, protein: false, medication: false, calZone: false },
       energy:          35,
       maxEnergy:       35,
       lastEnergyUpdate: null,
@@ -122,7 +122,11 @@ const Store = (() => {
       p.dailyHealsAwarded = { date: today, cal800: false, cal1600: false, protein: false };
     }
     if (!p.dailyStatBonusAwarded || p.dailyStatBonusAwarded.date === undefined) {
-      p.dailyStatBonusAwarded = { date: today, protein: false, fiberWater: false, calZone: false };
+      p.dailyStatBonusAwarded = { date: today, protein: false, medication: false, calZone: false };
+    }
+    if (p.dailyStatBonusAwarded && p.dailyStatBonusAwarded.medication === undefined) {
+      p.dailyStatBonusAwarded.medication = p.dailyStatBonusAwarded.fiberWater || false;
+      delete p.dailyStatBonusAwarded.fiberWater;
     }
 
     // ── Cohesion-pass migration ────────────────
@@ -314,6 +318,22 @@ const Store = (() => {
     getMedReminderLog()    { return get('medReminderLog') || {}; },
     setMedReminderLog(map) { set('medReminderLog', map); },
 
+    getMedTakenLog()  { return get('medTakenLog') || []; },
+    getMedTakenToday() {
+      const today = todayISO();
+      return (get('medTakenLog') || []).find(r => r.date === today) || null;
+    },
+    setMedTakenToday() {
+      const today = todayISO();
+      const log = get('medTakenLog') || [];
+      const row = { date: today, taken: true, loggedAt: Date.now() };
+      const idx = log.findIndex(r => r.date === today);
+      if (idx >= 0) log[idx] = row;
+      else log.unshift(row);
+      if (log.length > 90) log.splice(90);
+      set('medTakenLog', log);
+    },
+
     getDeficitHistory() { return get('deficitHistory') || []; },
     recordDeficitSnapshot(date, tdee, consumed, burned, deficitGoal) {
       const hist = get('deficitHistory') || [];
@@ -331,7 +351,7 @@ const Store = (() => {
       ['player','log','quests','monsters','achievements','settings',
        'attacks','cycleHistory','schedule','statHistory','bonus',
        'mealLibrary','weightLog','sleepLog','waterLog',
-       'medications','medReminderLog','deficitHistory'].forEach(k => {
+       'medications','medReminderLog','deficitHistory','medTakenLog'].forEach(k => {
         localStorage.removeItem(PREFIX + k);
       });
     },
