@@ -1351,6 +1351,7 @@ const Engine = (() => {
     // math helpers
     statCurve: StatCurve,
     xpToNextLevel,
+    checkLevelUp,
     getDerivedStats,
     weaknessMultiplier,
 

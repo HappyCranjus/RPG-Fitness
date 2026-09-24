@@ -419,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const player    = Store.getPlayer();
     const decayResult = Engine.applyStatDecay(player, today);
 
+    Engine.checkLevelUp(player);
     const activeMonster = Store.getMonsters().active;
     const survival = Engine.applySurvivalTicks(player, activeMonster, Date.now());
     Store.setPlayer(player);
