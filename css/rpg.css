@@ -1775,3 +1775,204 @@
   font-size: 0.72rem;
   font-weight: 600;
 }
+
+/* ── Ability grid ─────────────────────────────── */
+
+.ability-grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0 6px;
+}
+
+.btn-shop {
+  font-family: var(--font-display);
+  font-size: 0.45rem;
+  background: rgba(255,215,0,0.1);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold-dim);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.btn-shop:hover { background: rgba(255,215,0,0.2); }
+
+.ability-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ability-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: var(--card-bg);
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.ability-btn:not([disabled]):hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.ability-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.ability-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.ability-name {
+  font-family: var(--font-display);
+  font-size: 0.42rem;
+  color: var(--text-primary);
+}
+
+.ability-cost {
+  font-size: 0.72rem;
+  color: var(--accent-blue);
+}
+
+.ability-dmg {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+/* ── Status effect pills ─────────────────────── */
+
+.status-pill {
+  display: inline-block;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.status-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 0;
+  align-items: center;
+}
+
+/* ── Stun banner ──────────────────────────────── */
+
+.stun-banner {
+  background: rgba(230, 57, 70, 0.15);
+  border: 1px solid var(--accent-red);
+  border-radius: var(--radius-md);
+  color: var(--accent-red);
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  text-align: center;
+  padding: 8px 12px;
+  margin: 6px 0;
+}
+
+/* ── Last enemy move ──────────────────────────── */
+
+.last-enemy-move {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 6px;
+  padding: 4px 0;
+}
+
+/* ── Ability shop modal ───────────────────────── */
+
+.shop-modal {
+  padding: 4px 0 8px;
+}
+
+.shop-title {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  color: var(--accent-gold);
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.shop-balance {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.shop-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.shop-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.shop-item.locked {
+  opacity: 0.55;
+}
+
+.shop-item-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.shop-item-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.shop-item-name {
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.shop-item-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.shop-item-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shop-item-cost {
+  font-size: 0.72rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+  flex: 1;
+}
+
+.shop-item-lock {
+  font-size: 0.68rem;
+  color: var(--accent-red);
+}

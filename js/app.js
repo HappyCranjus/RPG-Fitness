@@ -338,8 +338,8 @@ function updateHeaderCountdowns(player) {
     statNextEl.textContent = `⏳ stat ${formatMs(ms)}`;
   }
   if (hpNextEl) {
-    const ms = Engine.msUntilNextHpTick(player, now);
-    hpNextEl.textContent = `🩸 ${formatMs(ms)}`;
+    const ms = Engine.msUntilNextMonsterAction(player, now);
+    hpNextEl.textContent = `⚔️ ${formatMs(ms)}`;
   }
 }
 
@@ -437,15 +437,23 @@ document.addEventListener('DOMContentLoaded', () => {
       const lost = Object.entries(decayResult.decayed).map(([s, v]) => `${s}-${v}`).join(' ');
       Toast.show(`💀 Stat decay (${decayResult.tier.label}): ` + lost, 'info');
     }
-    if (survival.attack && survival.attack.landed > 0 && activeMonster && !survival.knockedOut) {
+    if (survival.attack && survival.attack.damage > 0 && activeMonster && !survival.knockedOut) {
       const name = activeMonster.name || 'Monster';
-      Toast.show(`💢 ${name} struck ${survival.attack.landed}× (-${survival.attack.damage} HP)`, 'info');
+      const last = survival.attack.moveLog && survival.attack.moveLog.length > 0
+        ? survival.attack.moveLog[survival.attack.moveLog.length - 1]
+        : null;
+      const fx = last && last.effects && last.effects.length > 0
+        ? ` (${last.effects.join(', ')})`
+        : '';
+      Toast.show(`💢 ${name}: ${last ? last.moveName : 'attacked'} — -${survival.attack.damage} HP${fx}`, 'info');
     }
     if (survival.attack && survival.attack.dodged > 0) {
       Toast.show(`🌀 Dodged ${survival.attack.dodged}× (AGI shielded you)`, 'success');
     }
-    if (survival.decay.damage > 0 && !survival.knockedOut) {
-      Toast.show(`⏳ Passive HP drain: -${survival.decay.damage} HP. Eat something!`, 'info');
+    if (survival.attack && survival.attack.statusesApplied && survival.attack.statusesApplied.length > 0) {
+      const unique = [...new Set(survival.attack.statusesApplied)];
+      const labels = { poison: '☠️ Poisoned', stun: '⚡ Stunned', exhaust: '😮‍💨 Exhausted', dmg_down: '⬇️ Weakened', def_down: '🔓 Armor Broken' };
+      unique.forEach(s => { if (labels[s]) Toast.show(labels[s] + '!', 'info'); });
     }
     if (survival.knockedOut) {
       Toast.show('💀 You collapsed! Eat to recover.', 'info');

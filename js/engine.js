@@ -47,10 +47,32 @@ const Engine = (() => {
   const STAT_DECAY_PER_DAY = { STR: 3, AGI: 2, VIT: 3 };
   const STAT_DECAY_TICK_MS = 30 * 60 * 1000;  // 30 minutes
 
-  // HP survival loop
-  const HP_DECAY_PER_HOUR          = 2;
+  // Monster attack interval
   const MONSTER_ATTACK_INTERVAL_MS = 6 * 60 * 60 * 1000;
-  const MONSTER_ATTACK_DAMAGE      = 10;
+
+  // Exercise calorie burn at reference body weight (165 lbs); scale at runtime.
+  const REF_WEIGHT_LBS = 165;
+  const EXERCISE_CALS_PER_REP = {
+    ex_pushup:        0.32,
+    ex_situp:         0.25,
+    ex_pullup:        0.50,
+    ex_squat:         0.35,
+    ex_lunge:         0.32,
+    ex_dip:           0.45,
+    ex_burpee:        1.10,
+    ex_plank:         0.08,
+    ex_idl:           0.22,
+    ex_dumbbell:      0.30,
+    ex_bench:         0.35,
+    ex_row:           0.35,
+    ex_mil_press:     0.40,
+    ex_upright_row:   0.30,
+    ex_bicep_curl:    0.22,
+    ex_squat_w:       0.55,
+    ex_idl_w:         0.30,
+    ex_russian_twist: 0.18,
+    ex_flutter_kick:  0.20,
+  };
 
   // Daily HP bonuses for hitting nutrition milestones.
   const CAL_HEAL_BONUS_1   = 800;
@@ -96,48 +118,18 @@ const Engine = (() => {
     }
     const hoursElapsed = (Date.now() - new Date(player.lastEnergyUpdate).getTime()) / 3600000;
     const sleepRow = (typeof Store !== 'undefined' && Store.getSleepToday) ? Store.getSleepToday() : null;
-    const regen = hoursElapsed * (3 + player.stats.AGI * 0.5) * sleepEnergyMultiplier(sleepRow);
+    const stunned = (player.statusEffects || []).some(e => e.type === 'stun' && e.expiresAt > Date.now());
+    const stunMult = stunned ? 0.5 : 1.0;
+    const regen = hoursElapsed * (3 + player.stats.AGI * 0.5) * sleepEnergyMultiplier(sleepRow) * stunMult;
     player.energy = Math.min(player.maxEnergy || 35, (player.energy || 0) + regen);
     player.lastEnergyUpdate = new Date().toISOString();
   }
 
-  /* ── VIT-mitigated HP decay ──
-     Accumulates fractional debt so resist scales smoothly.
-     Resist = min(30%, VIT × 1%).
-  ─────────────────────────────────────────── */
-
-  function applyHpDecay(player, now) {
-    if (!player.lastHpTickAt) {
-      player.lastHpTickAt = now;
-      return { damage: 0 };
-    }
-    if (player.knockedOut) {
-      player.lastHpTickAt = now;
-      return { damage: 0 };
-    }
-    const hours = (now - player.lastHpTickAt) / 3600000;
-    if (hours <= 0) return { damage: 0 };
-
-    const resist = Math.min(0.30, (player.stats.VIT || 1) * 0.01);
-    const drain  = HP_DECAY_PER_HOUR * (1 - resist) * hours;
-    player.hpDebt = (player.hpDebt || 0) + drain;
-
-    const whole = Math.floor(player.hpDebt);
-    if (whole > 0) {
-      player.hp     = Math.max(0, (player.hp || 0) - whole);
-      player.hpDebt = player.hpDebt - whole;
-    }
-    player.lastHpTickAt = now;
-    return { damage: whole };
-  }
-
-  /* ── Monster 6h attacks with AGI dodge ──
-     Each tick: dodge chance = min(50%, AGI × 1.5%).
-     RNG is seeded per-tick so reloads don't change outcomes.
+  /* ── Deterministic per-tick RNG ─────────────────
+     Seeded per-tick so reloads don't change outcomes.
   ─────────────────────────────────────────── */
 
   function tickRng(seed) {
-    // Simple deterministic hash → [0, 1)
     let x = seed | 0;
     x = (x ^ 61) ^ (x >>> 16);
     x = (x + (x << 3)) | 0;
@@ -147,74 +139,321 @@ const Engine = (() => {
     return ((x >>> 0) % 100000) / 100000;
   }
 
+  /* ── Status-effect helpers ─────────────────────── */
+
+  function isPlayerStunned(player, now) {
+    return (player.statusEffects || []).some(e => e.type === 'stun' && e.expiresAt > (now || Date.now()));
+  }
+
+  function getMonsterDmgMult(monster) {
+    let mult = 1.0;
+    for (const e of (monster.statusEffects || [])) {
+      if (e.type === 'dmg_up' || e.type === 'dmg_down') mult *= e.mult;
+    }
+    return mult;
+  }
+
+  function getPlayerDefMult(player) {
+    let mult = 1.0;
+    for (const e of (player.statusEffects || [])) {
+      if (e.type === 'def_up' || e.type === 'def_down') mult *= e.mult;
+    }
+    return mult;
+  }
+
+  function getPlayerDmgMult(player) {
+    let mult = 1.0;
+    for (const e of (player.statusEffects || [])) {
+      if (e.type === 'dmg_up' || e.type === 'dmg_down') mult *= e.mult;
+    }
+    return mult;
+  }
+
+  function getMonsterDefMult(monster) {
+    let mult = 1.0;
+    for (const e of (monster.statusEffects || [])) {
+      if (e.type === 'def_up' || e.type === 'def_down') mult *= e.mult;
+    }
+    return mult;
+  }
+
+  function pickWeightedMove(moves, seed) {
+    const total = moves.reduce((s, m) => s + (m.weight || 1), 0);
+    const r = tickRng(seed) * total;
+    let cumulative = 0;
+    for (const move of moves) {
+      cumulative += (move.weight || 1);
+      if (r < cumulative) return move;
+    }
+    return moves[moves.length - 1];
+  }
+
+  function applyStatusEffect(target, effect, tickTimestamp) {
+    if (!Array.isArray(target.statusEffects)) target.statusEffects = [];
+    const status = { ...effect };
+    if (status.type === 'stun' && status.durationMs !== undefined) {
+      status.expiresAt = (tickTimestamp || Date.now()) + status.durationMs;
+      delete status.durationMs;
+    }
+    // Replace existing same-type effect (no stacking)
+    target.statusEffects = target.statusEffects.filter(e => e.type !== status.type);
+    target.statusEffects.push(status);
+  }
+
+  /* ── Monster move-pool attacks (6h ticks) ───────── */
+
   function applyMonsterAttacks(player, monster, now) {
     if (!monster || !player.lastMonsterAttackAt || player.knockedOut) {
       player.lastMonsterAttackAt = now;
-      return { damage: 0, ticksApplied: 0, dodged: 0 };
+      return { damage: 0, ticksApplied: 0, dodged: 0, landed: 0, moveLog: [], statusesApplied: [] };
     }
     const elapsed = now - player.lastMonsterAttackAt;
     const ticks   = Math.floor(elapsed / MONSTER_ATTACK_INTERVAL_MS);
-    if (ticks <= 0) return { damage: 0, ticksApplied: 0, dodged: 0 };
+    if (ticks <= 0) return { damage: 0, ticksApplied: 0, dodged: 0, landed: 0, moveLog: [], statusesApplied: [] };
+
+    if (!Array.isArray(monster.statusEffects)) monster.statusEffects = [];
+    if (!Array.isArray(player.statusEffects))  player.statusEffects  = [];
 
     const dodgeChance = Math.min(0.50, (player.stats.AGI || 1) * 0.015);
-    let landed = 0, dodged = 0;
+    const moves = monster.moves || [];
+
+    let totalDamage = 0;
+    let totalDodged = 0;
+    let totalLanded = 0;
+    const moveLog = [];
+    const statusesApplied = [];
+
     const anchor = player.lastMonsterAttackAt;
+
     for (let i = 0; i < ticks; i++) {
-      const r = tickRng(anchor + i * MONSTER_ATTACK_INTERVAL_MS);
-      if (r < dodgeChance) dodged++;
-      else                 landed++;
+      const tickTime = anchor + i * MONSTER_ATTACK_INTERVAL_MS;
+      const seed1 = tickTime;
+      const seed2 = tickTime + 1;
+
+      // ── Step 1: tick down player status effects ──
+      const newPlayerEffects = [];
+      for (const eff of player.statusEffects) {
+        if (eff.type === 'poison') {
+          const defMult = getPlayerDefMult(player);
+          const dmg = Math.max(1, Math.floor(eff.damagePerTick * defMult));
+          player.hp = Math.max(0, player.hp - dmg);
+          totalDamage += dmg;
+          eff.ticksRemaining -= 1;
+          if (eff.ticksRemaining > 0) newPlayerEffects.push(eff);
+        } else if (eff.type === 'stun') {
+          if (eff.expiresAt > tickTime + MONSTER_ATTACK_INTERVAL_MS) newPlayerEffects.push(eff);
+        } else {
+          eff.ticksRemaining -= 1;
+          if (eff.ticksRemaining > 0) newPlayerEffects.push(eff);
+        }
+      }
+      player.statusEffects = newPlayerEffects;
+
+      // ── Step 2: tick down monster status effects ──
+      let monsterSkipsTurn = false;
+      const newMonsterEffects = [];
+      for (const eff of monster.statusEffects) {
+        if (eff.type === 'stun') {
+          if (eff.ticksRemaining > 0) {
+            monsterSkipsTurn = true;
+            eff.ticksRemaining -= 1;
+            if (eff.ticksRemaining > 0) newMonsterEffects.push(eff);
+          }
+        } else if (eff.type === 'poison') {
+          monster.hpCurrent = Math.max(0, monster.hpCurrent - eff.damagePerTick);
+          eff.ticksRemaining -= 1;
+          if (eff.ticksRemaining > 0) newMonsterEffects.push(eff);
+        } else {
+          eff.ticksRemaining -= 1;
+          if (eff.ticksRemaining > 0) newMonsterEffects.push(eff);
+        }
+      }
+      monster.statusEffects = newMonsterEffects;
+
+      if (monsterSkipsTurn) {
+        moveLog.push({ moveName: 'Stunned', damage: 0, effects: [] });
+        continue;
+      }
+
+      // ── Step 3: fallback to basic attack if no moves defined ──
+      let thisMoveDamage = 0;
+      const thisEffects = [];
+
+      if (moves.length === 0) {
+        const r = tickRng(seed1);
+        if (r >= dodgeChance) {
+          const dmg = 10;
+          player.hp = Math.max(0, player.hp - dmg);
+          totalDamage += dmg;
+          thisMoveDamage = dmg;
+          totalLanded++;
+        } else {
+          totalDodged++;
+        }
+        moveLog.push({ moveName: 'Attack', damage: thisMoveDamage, effects: [] });
+        continue;
+      }
+
+      // ── Step 4: pick and apply move ──
+      const move = pickWeightedMove(moves, seed1);
+      const monsterDmgMult = getMonsterDmgMult(monster);
+      const playerDefMult  = getPlayerDefMult(player);
+
+      if (move.baseDamage > 0) {
+        const r = tickRng(seed2);
+        const isDodged = (move.type === 'attack') && (r < dodgeChance);
+        if (isDodged) {
+          totalDodged++;
+        } else {
+          const raw = Math.max(1, Math.floor(move.baseDamage * monsterDmgMult * playerDefMult));
+          player.hp = Math.max(0, player.hp - raw);
+          totalDamage  += raw;
+          thisMoveDamage = raw;
+          totalLanded++;
+        }
+      }
+
+      if (move.healMonster) {
+        monster.hpCurrent = Math.min(monster.hpMax, monster.hpCurrent + move.healMonster);
+      }
+
+      if (move.applyPlayerStatus) {
+        applyStatusEffect(player, move.applyPlayerStatus, tickTime);
+        thisEffects.push(move.applyPlayerStatus.type);
+        statusesApplied.push(move.applyPlayerStatus.type);
+      }
+
+      if (move.applyMonsterStatus) {
+        applyStatusEffect(monster, move.applyMonsterStatus, tickTime);
+      }
+
+      moveLog.push({ moveName: move.name, damage: thisMoveDamage, effects: thisEffects });
+      monster.lastMove = { name: move.name, damage: thisMoveDamage, effects: thisEffects };
     }
-    const damage = landed * MONSTER_ATTACK_DAMAGE;
-    player.hp = Math.max(0, (player.hp || 0) - damage);
+
     player.lastMonsterAttackAt += ticks * MONSTER_ATTACK_INTERVAL_MS;
-    return { damage, ticksApplied: ticks, landed, dodged };
+    return { damage: totalDamage, ticksApplied: ticks, landed: totalLanded, dodged: totalDodged, moveLog, statusesApplied };
   }
 
   function applySurvivalTicks(player, monster, now) {
-    const decay  = applyHpDecay(player, now);
     const attack = applyMonsterAttacks(player, monster, now);
     let knockedOut = false;
     if (player.hp <= 0 && !player.knockedOut) {
       triggerKnockOut(player);
       knockedOut = true;
     }
-    return { decay, attack, knockedOut };
+    return { attack, knockedOut };
   }
 
-  /* ── Explicit attack (Combat screen button) ──
-     STR weakness amplifier: 1.5 + STR × 0.03.
-  ─────────────────────────────────────────── */
+  /* ── Player ability use ──────────────────────────── */
 
-  function computeAttack(player, monster, todayLogs) {
+  function useAbility(abilityId, player, monster, todayLogs) {
+    const now = Date.now();
+    if (!Array.isArray(player.statusEffects)) player.statusEffects = [];
+
+    // Stun check
+    if (abilityId !== 'ab_strike' && isPlayerStunned(player, now)) {
+      return { success: false, reason: 'stunned' };
+    }
+
+    // Lookup ability
+    if (typeof ABILITY_CATALOG === 'undefined') return { success: false, reason: 'no_catalog' };
+    const ability = ABILITY_CATALOG.find(a => a.id === abilityId);
+    if (!ability) return { success: false, reason: 'unknown' };
+
+    // Ownership check
+    if (!Array.isArray(player.abilities) || !player.abilities.includes(abilityId)) {
+      return { success: false, reason: 'not_owned' };
+    }
+
+    // Energy check (apply exhaust multiplier)
     updateEnergyRegen(player);
-    if ((player.energy || 0) < 10) {
-      return { dmg: 0, noEnergy: true, multiplier: 1, matchType: 'none', baseDmg: 0 };
-    }
-    const baseDmg = Math.floor(player.stats.STR * 5);
-
-    const loggedTypes = new Set();
-    for (const entry of todayLogs) {
-      for (const a of (entry.activities || [])) loggedTypes.add(a.type);
-      for (const ex of (entry.exercises || [])) loggedTypes.add(ex.type);
+    const exhaustEff = player.statusEffects.find(e => e.type === 'exhaust');
+    const costMult = exhaustEff ? (exhaustEff.energyCostMult || 1.5) : 1.0;
+    const actualCost = Math.ceil(ability.energyCost * costMult);
+    if ((player.energy || 0) < actualCost) {
+      return { success: false, reason: 'no_energy', cost: actualCost };
     }
 
-    let multiplier = 1.0;
-    let matchType = 'neutral';
-    const weaknesses = monster.weaknesses || [];
-    const resistances = monster.resistances || [];
-    if ([...loggedTypes].some(t => weaknesses.includes(t))) {
-      multiplier = 1.5 + (player.stats.STR || 1) * 0.03;
-      matchType = 'weakness';
-    } else if (loggedTypes.size > 0 && [...loggedTypes].every(t => resistances.includes(t))) {
-      multiplier = 0.5;
-      matchType = 'resistance';
-    }
-
-    const finalDmg = Math.floor(baseDmg * multiplier);
-    player.energy = Math.max(0, (player.energy || 10) - 10);
+    player.energy = Math.max(0, (player.energy || 0) - actualCost);
     player.lastEnergyUpdate = new Date().toISOString();
 
-    return { dmg: finalDmg, baseDmg, multiplier, matchType, noEnergy: false, loggedTypes: [...loggedTypes] };
+    const effect = ability.effect || {};
+    let finalDmg = 0;
+    let matchType = 'neutral';
+    let healAmt = 0;
+
+    // Compute attack damage
+    if (effect.baseDmgMult && monster) {
+      if (!Array.isArray(monster.statusEffects)) monster.statusEffects = [];
+
+      const baseDmg = Math.floor(player.stats.STR * 5);
+
+      // Weakness/resistance from logged types
+      const loggedTypes = new Set();
+      for (const entry of (todayLogs || [])) {
+        for (const a  of (entry.activities || [])) loggedTypes.add(a.type);
+        for (const ex of (entry.exercises  || [])) loggedTypes.add(ex.type);
+      }
+      const weaknesses  = monster.weaknesses  || [];
+      const resistances = monster.resistances || [];
+      let typeMult = 1.0;
+      if ([...loggedTypes].some(t => weaknesses.includes(t))) {
+        typeMult  = 1.5 + (player.stats.STR || 1) * 0.03;
+        matchType = 'weakness';
+      } else if (loggedTypes.size > 0 && [...loggedTypes].every(t => resistances.includes(t))) {
+        typeMult  = 0.5;
+        matchType = 'resistance';
+      }
+
+      const playerDmgMult = getPlayerDmgMult(player);
+      const monsterDefMult = getMonsterDefMult(monster);
+
+      finalDmg = Math.floor(baseDmg * effect.baseDmgMult * typeMult * playerDmgMult * monsterDefMult);
+      if (monster) monster.hpCurrent = Math.max(0, monster.hpCurrent - finalDmg);
+
+      // Vampiric heal
+      if (effect.healPct) {
+        healAmt = Math.min(effect.healMax || Infinity, Math.floor(finalDmg * effect.healPct));
+        player.hp = Math.min(player.hpMax || 115, player.hp + healAmt);
+      }
+    }
+
+    // Flat heal
+    if (effect.healFlat) {
+      healAmt = effect.healFlat;
+      player.hp = Math.min(player.hpMax || 115, (player.hp || 0) + healAmt);
+    }
+
+    // Apply status to monster
+    if (effect.applyToMonster && monster) {
+      applyStatusEffect(monster, effect.applyToMonster, now);
+    }
+
+    // Apply status to self
+    if (effect.applyToSelf) {
+      applyStatusEffect(player, effect.applyToSelf, now);
+    }
+
+    // Cleanse
+    if (effect.removePlayerStatuses) {
+      player.statusEffects = player.statusEffects.filter(
+        e => !effect.removePlayerStatuses.includes(e.type)
+      );
+    }
+
+    return {
+      success:     true,
+      dmg:         finalDmg,
+      matchType,
+      abilityName: ability.name,
+      abilityIcon: ability.icon,
+      actualCost,
+      healAmt,
+      statusAppliedToMonster: effect.applyToMonster ? effect.applyToMonster.type : null,
+      statusAppliedToSelf:    effect.applyToSelf    ? effect.applyToSelf.type    : null,
+      cleansed: !!(effect.removePlayerStatuses),
+    };
   }
 
   /* ── XP calculation ───────────────────────── */
@@ -898,7 +1137,6 @@ const Engine = (() => {
     player.maxEnergy  = 30 + (player.stats.AGI * 5);
     player.energy     = Math.min(player.energy || 0, player.maxEnergy);
     player.knockedOut = true;
-    player.lastHpTickAt        = Date.now();
     player.lastMonsterAttackAt = Date.now();
     player.lastStatDecayTickAt = Date.now();
     Quests.resetDailyWeeklyProgress();
@@ -1001,7 +1239,7 @@ const Engine = (() => {
 
     const allTodayLog  = Store.getLog().filter(e => e.date === today);
     const defTotals    = dailyTotals(allTodayLog);
-    const defBurned    = getTodayCaloriesBurned(allTodayLog);
+    const defBurned    = getTodayCaloriesBurned(allTodayLog, hpPlayer);
     const tdeeRes      = computeTDEE(player);
     if (tdeeRes) {
       Store.recordDeficitSnapshot(today, tdeeRes.tdee, defTotals.calories, defBurned, (player.body && player.body.deficitGoal) || 500);
@@ -1111,10 +1349,19 @@ const Engine = (() => {
     return { bmr: Math.round(bmr), tdee, targetCalories };
   }
 
-  // Sum estimated calories burned from all activities in a set of log entries.
-  function getTodayCaloriesBurned(todayLog) {
-    return (todayLog || []).reduce((sum, e) =>
-      sum + (e.activities || []).reduce((s, a) => s + (a.estimatedCalories || 0), 0), 0);
+  // Sum estimated calories burned from activities + exercises in a set of log entries.
+  function getTodayCaloriesBurned(todayLog, player) {
+    const weightLbs   = (player && player.body && player.body.weightLbs) || REF_WEIGHT_LBS;
+    const weightScale = weightLbs / REF_WEIGHT_LBS;
+    let total = 0;
+    for (const e of (todayLog || [])) {
+      for (const a of (e.activities || [])) total += (a.estimatedCalories || 0);
+      for (const ex of (e.exercises || [])) {
+        const rate = EXERCISE_CALS_PER_REP[ex.exerciseId] || 0.3;
+        total += rate * (ex.totalReps || 0) * weightScale;
+      }
+    }
+    return Math.round(total);
   }
 
   // Time until the next 30-min stat decay tick fires.
@@ -1125,17 +1372,11 @@ const Engine = (() => {
     return Math.max(0, next);
   }
 
-  // Time until the next integer HP loss given current VIT and accumulated debt.
-  function msUntilNextHpTick(player, now) {
-    if (player.knockedOut) return Infinity;
-    const resist = Math.min(0.30, (player.stats.VIT || 1) * 0.01);
-    const drainPerMs = (HP_DECAY_PER_HOUR * (1 - resist)) / 3600000;
-    if (drainPerMs <= 0) return Infinity;
-    const debtNeeded = 1 - (player.hpDebt || 0);
-    const last = player.lastHpTickAt || Date.now();
-    const accruedSinceLast = drainPerMs * ((now || Date.now()) - last);
-    const remaining = Math.max(0, debtNeeded - accruedSinceLast);
-    return Math.ceil(remaining / drainPerMs);
+  // Time until the next monster action tick.
+  function msUntilNextMonsterAction(player, now) {
+    if (!player.lastMonsterAttackAt) return MONSTER_ATTACK_INTERVAL_MS;
+    const elapsed = (now || Date.now()) - player.lastMonsterAttackAt;
+    return Math.max(0, MONSTER_ATTACK_INTERVAL_MS - (elapsed % MONSTER_ATTACK_INTERVAL_MS));
   }
 
   return {
@@ -1146,11 +1387,10 @@ const Engine = (() => {
     BONUS_POOL,
     BONUS_WINDOW_MS,
     BONUS_MULTIPLIER,
-    HP_DECAY_PER_HOUR,
     MONSTER_ATTACK_INTERVAL_MS,
-    MONSTER_ATTACK_DAMAGE,
     SUGAR_DMG_PER_GRAM,
     TIER_DEF,
+    EXERCISE_CALS_PER_REP,
 
     // math helpers
     statCurve: StatCurve,
@@ -1164,9 +1404,8 @@ const Engine = (() => {
     computeWaterEnergyHeal,
     sugarOverageForMeal,
     classifyMeal,
-    computeAttack,
+    useAbility,
     updateEnergyRegen,
-    applyHpDecay,
     applyMonsterAttacks,
     applySurvivalTicks,
     rolloverCycleIfNeeded,
@@ -1176,10 +1415,17 @@ const Engine = (() => {
     isWeighInWindow,
     MAX_DIS_POINTS,
 
+    // status helpers
+    isPlayerStunned,
+    getMonsterDmgMult,
+    getMonsterDefMult,
+    getPlayerDefMult,
+    getPlayerDmgMult,
+
     // introspection
     daysUntilCycleEnd,
     msUntilNextStatTick,
-    msUntilNextHpTick,
+    msUntilNextMonsterAction,
     dailyTotals,
     computeTDEE,
     getTodayCaloriesBurned,

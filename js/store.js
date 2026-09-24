@@ -86,6 +86,8 @@ const Store = (() => {
       energy:          35,
       maxEnergy:       35,
       lastEnergyUpdate: null,
+      statusEffects:   [],
+      abilities:       ['ab_strike'],
       statCurveMigrated: true,
       createdAt: new Date().toISOString(),
     };
@@ -173,6 +175,8 @@ const Store = (() => {
     if (!p.body) {
       p.body = { heightIn: null, weightLbs: null, age: null, sex: 'male', activityLevel: 1.375, deficitGoal: 500 };
     }
+    if (!Array.isArray(p.statusEffects)) p.statusEffects = [];
+    if (!Array.isArray(p.abilities))     p.abilities = ['ab_strike'];
     return p;
   }
 
@@ -194,7 +198,11 @@ const Store = (() => {
     getQuests()    { return get('quests') || { active: [], completed: [], lastRefreshed: null }; },
     setQuests(q)   { set('quests', q); },
 
-    getMonsters()  { return get('monsters') || { active: null, defeated: [], killCount: 0 }; },
+    getMonsters()  {
+      const m = get('monsters') || { active: null, defeated: [], killCount: 0 };
+      if (m.active && !Array.isArray(m.active.statusEffects)) m.active.statusEffects = [];
+      return m;
+    },
     setMonsters(m) { set('monsters', m); },
 
     getAchievements()  { return get('achievements') || { unlocked: [], seen: [] }; },

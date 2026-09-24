@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rpgfit-v19';
+const CACHE_NAME = 'rpgfit-v20';
 
 // Paths are relative to the service worker's location, so the app
 // works whether it's served from the domain root or a subpath
@@ -16,6 +16,7 @@ const PRECACHE_URLS = [
   './js/ranks.js',
   './js/routines.js',
   './js/engine.js',
+  './js/abilities.js',
   './js/monsters.js',
   './js/quests.js',
   './js/achievements.js',
@@ -80,16 +81,14 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Network-first: always fetch fresh, update cache, fall back to cache when offline.
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      });
-    })
+    fetch(event.request).then(response => {
+      if (response.ok) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      }
+      return response;
+    }).catch(() => caches.match(event.request))
   );
 });

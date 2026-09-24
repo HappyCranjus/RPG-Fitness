@@ -34,7 +34,7 @@ function renderDashboard(container) {
   const medsHtml = renderMedsWidget();
   const momentumHtml = renderStatMomentumCard(player, totals, tierInfo);
   const bonusHtml = renderBonusBanner(bonus, Date.now());
-  const forecastHtml = renderHpForecast(player);
+  const statusHtml = renderStatusEffectsSummary(player);
   const tierHtml = renderTierBanner(tierInfo, player);
 
   // Refresh quests for today
@@ -55,7 +55,7 @@ function renderDashboard(container) {
     </div>
     ${momentumHtml}
     ${muscleCoverageHtml}
-    ${forecastHtml}
+    ${statusHtml}
     ${bonusHtml}
     ${tierHtml}
 
@@ -210,30 +210,30 @@ function renderTierBanner(tierInfo, player) {
   `;
 }
 
-/* ── HP forecast (shown when you've been silent on meals) ── */
+/* ── Active status effects summary ─────────────────── */
 
-function renderHpForecast(player) {
-  if (player.knockedOut) return '';
-  const log = Store.getLog();
-  let latestMealTs = 0;
-  for (const entry of log) {
-    if (entry.meals && entry.meals.length > 0 && entry.timestamp > latestMealTs) {
-      latestMealTs = entry.timestamp;
-    }
-  }
-  const hoursSinceMeal = latestMealTs
-    ? (Date.now() - latestMealTs) / 3600000
-    : Infinity;
-  if (hoursSinceMeal < 12) return '';
-
-  const vitResist = Math.min(0.30, (player.stats.VIT || 1) * 0.01);
-  const damagePerHour = Engine.HP_DECAY_PER_HOUR * (1 - vitResist) + Engine.MONSTER_ATTACK_DAMAGE / 6;
-  const hoursToKo = Math.max(0, Math.round((player.hp || 0) / damagePerHour));
-  if (hoursToKo > 72) return '';
-  const label = hoursToKo <= 0
-    ? 'KO imminent — eat now!'
-    : `KO in ~${hoursToKo}h at current pace`;
-  return `<div class="hp-forecast">⏳ ${label}</div>`;
+function renderStatusEffectsSummary(player) {
+  const effects = (player.statusEffects || []);
+  if (effects.length === 0) return '';
+  const now = Date.now();
+  const pills = effects.map(e => {
+    const icons = { poison: '☠️', stun: '⚡', exhaust: '😮‍💨', dmg_down: '⬇️', def_down: '🔓', def_up: '🛡', dmg_up: '🔥' };
+    const labels = { poison: 'Poisoned', stun: 'Stunned', exhaust: 'Exhausted', dmg_down: 'Weakened', def_down: 'Exposed', def_up: 'Shielded', dmg_up: 'Fury' };
+    const icon  = icons[e.type]  || '❓';
+    const label = labels[e.type] || e.type;
+    const detail = e.type === 'stun'
+      ? `${Math.ceil(Math.max(0, (e.expiresAt - now) / 60000))}m`
+      : `${e.ticksRemaining}t`;
+    const isBad = ['poison','stun','exhaust','dmg_down','def_down'].includes(e.type);
+    const color = isBad ? 'var(--accent-red)' : 'var(--accent-green)';
+    return `<span class="status-pill" style="border-color:${color};color:${color};">${icon} ${label} (${detail})</span>`;
+  }).join('');
+  return `
+    <div class="card" style="padding:10px 14px;">
+      <div class="card-title" style="margin-bottom:8px;">⚠️ ACTIVE STATUS EFFECTS</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${pills}</div>
+    </div>
+  `;
 }
 
 /* ── 6-hour bonus banner ─────────────────────────── */
@@ -648,7 +648,7 @@ function renderDeficitCard(player, totals, todayLog) {
 
   const { tdee, targetCalories } = tdeeResult;
   const consumed     = Math.round(totals.calories);
-  const burned       = Engine.getTodayCaloriesBurned(todayLog);
+  const burned       = Engine.getTodayCaloriesBurned(todayLog, player);
   const net          = consumed - burned;
   const deficitGoal  = (player.body && player.body.deficitGoal) || 500;
   const deficitAchieved = Math.max(0, tdee - net);
