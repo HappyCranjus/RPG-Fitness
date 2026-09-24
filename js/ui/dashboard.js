@@ -591,6 +591,7 @@ function renderQuestSummary(activeQuests, questState, player) {
           <span class="quest-title" style="font-size:0.85rem;">${escHtml(q.title)}</span>
           <span class="quest-status-icon">${done ? '✅' : '○'}</span>
         </div>
+        <div style="font-size:0.72rem;color:var(--accent-gold);margin-bottom:4px;">+${q.reward.xp} XP · ${q.reward.gold}🪙</div>
         ${!done ? `
           <div class="quest-progress-row">
             <div class="progress-track" style="flex:1;height:6px;">

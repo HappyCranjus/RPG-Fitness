@@ -1194,7 +1194,7 @@ const Engine = (() => {
 
     const allTodayLog  = Store.getLog().filter(e => e.date === today);
     const defTotals    = dailyTotals(allTodayLog);
-    const defBurned    = getTodayCaloriesBurned(allTodayLog, hpPlayer);
+    const defBurned    = getTodayCaloriesBurned(allTodayLog, player);
     const tdeeRes      = computeTDEE(player);
     if (tdeeRes) {
       Store.recordDeficitSnapshot(today, tdeeRes.tdee, defTotals.calories, defBurned, (player.body && player.body.deficitGoal) || 500);

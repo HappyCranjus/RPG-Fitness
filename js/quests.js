@@ -252,14 +252,14 @@ const Quests = (() => {
         return weekEntries.filter(e => e.activities.length > 0 || e.exercises.length > 0).length;
 
       case 'full_meal_days_this_week': {
-        const days = new Set();
+        const dayMealTypes = {};
         for (const e of weekEntries) {
-          const types = new Set(e.meals.map(m => m.mealType));
-          if (types.has('breakfast') && types.has('lunch') && types.has('dinner')) {
-            days.add(e.date);
-          }
+          if (!dayMealTypes[e.date]) dayMealTypes[e.date] = new Set();
+          for (const m of e.meals) dayMealTypes[e.date].add(m.mealType);
         }
-        return days.size;
+        return Object.values(dayMealTypes).filter(types =>
+          types.has('breakfast') && types.has('lunch') && types.has('dinner')
+        ).length;
       }
 
       case 'sports_or_swim_sessions_this_week':
