@@ -277,7 +277,7 @@ function renderSettings(container) {
     <div class="card mt-12">
       <div class="card-title" style="margin-bottom:10px;">ABOUT</div>
       <div class="muted-text">RPG Fitness — A gamified fitness tracker.<br>All data stored locally on your device.</div>
-      <div class="muted-text" style="margin-top:6px;font-size:0.72rem;">v1.2</div>
+      <div class="muted-text" style="margin-top:6px;font-size:0.72rem;">v1.3</div>
     </div>
   `;
 
