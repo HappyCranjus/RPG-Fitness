@@ -417,7 +417,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const today     = Store.today();
     const weekStart = Store.weekStart();
     const player    = Store.getPlayer();
-    const rollResult  = Engine.rolloverCycleIfNeeded(player, today);
     const decayResult = Engine.applyStatDecay(player, today);
 
     const activeMonster = Store.getMonsters().active;
@@ -430,9 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const bonusJustRolled = priorBonus && activeBonus.itemId !== priorBonus.itemId
                           && priorBonus.windowEnd <= Date.now();
 
-    if (rollResult.rolled) {
-      Toast.show('🔄 New 2-week cycle started! Level reset; stats preserved.', 'info');
-    }
     if (Object.keys(decayResult.decayed).length > 0) {
       const lost = Object.entries(decayResult.decayed).map(([s, v]) => `${s}-${v}`).join(' ');
       Toast.show(`💀 Stat decay (${decayResult.tier.label}): ` + lost, 'info');

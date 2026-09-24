@@ -823,9 +823,6 @@ const Engine = (() => {
       player.level += 1;
       player.xpToNextLevel = xpToNextLevel(player.level);
       player.gold += 50;
-      if (player.level > (player.cyclePeakLevel || 1)) {
-        player.cyclePeakLevel = player.level;
-      }
       results.push(player.level);
     }
     return results;
@@ -859,45 +856,8 @@ const Engine = (() => {
     return Math.floor((to - from) / 86400000);
   }
 
-  function rolloverCycleIfNeeded(player, today) {
-    if (!player.cycleStart) {
-      player.cycleStart      = today;
-      player.cyclePeakLevel  = player.level || 1;
-      player.cycleXpEarned   = 0;
-      player.cycleDaysActive = 0;
-      player.cycleDecayHits  = 0;
-      return { rolled: false };
-    }
-
-    const elapsed = daysBetween(player.cycleStart, today);
-    if (elapsed < CYCLE_DAYS) return { rolled: false };
-
-    const cycleEnd = new Date(player.cycleStart + 'T00:00:00');
-    cycleEnd.setDate(cycleEnd.getDate() + CYCLE_DAYS - 1);
-    const cycleEndISO = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, '0')}-${String(cycleEnd.getDate()).padStart(2, '0')}`;
-
-    const statSum = (player.stats.STR || 0) + (player.stats.AGI || 0) + (player.stats.VIT || 0);
-    Store.appendCycleHistory({
-      cycleStart:    player.cycleStart,
-      cycleEnd:      cycleEndISO,
-      peakLevel:     player.cyclePeakLevel || player.level || 1,
-      totalXpEarned: player.cycleXpEarned  || 0,
-      daysActive:    player.cycleDaysActive || 0,
-      decayHits:     player.cycleDecayHits  || 0,
-      finalStatSum:  statSum,
-    });
-
-    player.level             = 1;
-    player.xp                = 0;
-    player.xpToNextLevel     = 100;
-    player.cycleStart        = today;
-    player.cyclePeakLevel    = 1;
-    player.cycleXpEarned     = 0;
-    player.cycleDaysActive   = 0;
-    player.cycleDecayHits    = 0;
-    player.cycleLastActiveDate = null;
-
-    return { rolled: true };
+  function rolloverCycleIfNeeded(player, _today) {
+    return { rolled: false };
   }
 
   /* ── Damage computation ───────────────────── */
@@ -1193,11 +1153,6 @@ const Engine = (() => {
 
     player.xp += xpResult.total;
     player.totalXpEarned += xpResult.total;
-    player.cycleXpEarned = (player.cycleXpEarned || 0) + xpResult.total;
-    if (player.cycleLastActiveDate !== today) {
-      player.cycleDaysActive  = (player.cycleDaysActive || 0) + 1;
-      player.cycleLastActiveDate = today;
-    }
 
     player.totalActivitiesLogged += logEntry.activities.length;
     player.totalExercisesLogged  += logEntry.exercises.length;

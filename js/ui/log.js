@@ -957,13 +957,11 @@ function showResultModal(results) {
 }
 
 function showLevelUpModal(newLevel) {
-  const player = Store.getPlayer();
-  const daysLeft = Engine.daysUntilCycleEnd(player, Store.today());
   const html = `
     <div class="center-text">
       <div class="levelup-title">⭐ LEVEL UP! ⭐</div>
       <div class="levelup-new-level">LVL ${newLevel}</div>
-      <div class="muted-text mb-16">Cosmetic level — resets in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. +50 gold earned.</div>
+      <div class="muted-text mb-16">+50 gold earned.</div>
       <button class="btn btn-primary" id="levelup-ok-btn">GLORIOUS!</button>
     </div>
   `;

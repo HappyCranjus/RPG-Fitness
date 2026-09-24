@@ -15,7 +15,6 @@ function renderDashboard(container) {
   const today    = Store.today();
   const weekStart = Store.weekStart();
   const rank     = Ranks.getRank(player);
-  const daysLeft = Engine.daysUntilCycleEnd(player, today);
   const schedule = Store.getSchedule();
   const todayRoutineId = schedule[Store.weekdayKey()];
   const todayRoutine   = todayRoutineId ? Routines.getRoutine(todayRoutineId) : null;
@@ -68,10 +67,6 @@ function renderDashboard(container) {
         <div class="rank-info">
           <div class="rank-info-label">${rank.label}</div>
           <div class="rank-info-sum">${rank.statSum} stat points</div>
-        </div>
-        <div class="cycle-info">
-          <div class="cycle-info-label">CYCLE</div>
-          <div class="cycle-info-days">${daysLeft}d left</div>
         </div>
       </div>
       ${rank.nextTier ? `

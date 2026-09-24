@@ -32,7 +32,6 @@ function renderCharacterBody(container) {
   const today   = Store.today();
   const todayLog = Store.getLog().filter(e => e.date === today);
   const tierInfo = Engine.disciplineTier(player, todayLog);
-  const daysLeft = Engine.daysUntilCycleEnd(player, today);
 
   const hp    = player.hp    ?? player.hpMax ?? 100;
   const hpMax = player.hpMax ?? (100 + player.stats.VIT * 15);
@@ -121,7 +120,7 @@ function renderCharacterBody(container) {
       </div>
       <div class="xp-section">
         <div class="xp-label">
-          <span>XP this cycle (${daysLeft}d left) · peak Lv${player.cyclePeakLevel || player.level}</span>
+          <span>XP</span>
           <span>${player.xp} / ${player.xpToNextLevel}</span>
         </div>
         <div class="progress-track">
