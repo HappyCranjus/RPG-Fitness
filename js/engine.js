@@ -1207,6 +1207,7 @@ const Engine = (() => {
     const newAchievements = Achievements.check(freshPlayer, freshMonsters);
 
     const hpPlayer = Store.getPlayer();
+    newLevels.push(...checkLevelUp(hpPlayer));
     hpPlayer.hpMax = 100 + (hpPlayer.stats.VIT * 15);
     const hpResult = computeHPChanges(logEntry, hpPlayer, today, Store.getLog());
 
